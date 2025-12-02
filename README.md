@@ -15,15 +15,14 @@ a standalonh html/js is planned
 
 JAPPL accepts multiple variations of the same command and converts them into clean internal bytecode:
 
->print hi
->print "hi"
->print=hi
->print hi"
+   " >print hi "
+   " >print "hi" "
+   " >print=hi "
 
 
 All normalize into:
 
->print "hi"
+" >print "hi" "
 
 
 This makes JAPPL extremely easy for beginners and hard to break.
