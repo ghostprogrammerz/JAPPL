@@ -1,5 +1,5 @@
 # JAPPL
-website: https://seancathancabral-bit.github.io/JAPPL/
+website:  https://ghostprogrammerz.github.io/JAPPL/
 JAPPL Scratch Project: https://scratch.mit.edu/projects/1084888676/
 JAPPL Discussion Thread and docuentation : https://scratch.mit.edu/discuss/topic/837372/
 
