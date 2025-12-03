@@ -21,14 +21,16 @@ Syntax-tolerant
 
 JAPPL accepts multiple variations of the same command and converts them into clean internal bytecode:
 
-   >print hi 
-   >print "hi" 
-   >print=hi 
+'  >print hi  '
+
+'>print "hi"'
+
+'  >print=hi  ' 
 
 
 All normalize into:
 
- >print "hi" 
+'  >print "hi"  '
 
 
 This makes JAPPL extremely easy for beginners and hard to break.
@@ -74,14 +76,21 @@ portable project file
 
 simple mental model
 
- Core Commands (examples)
->print hello
->wait 1
->clear screen
->make variable x
->set variable x to 4
->repeat infinite
->repeat 10
+Core Commands (examples)
+ 
+'  >print hello  '
+
+'  >wait 1  '
+
+'  >clear screen  '
+
+' >make variable x  '
+
+'  >set variable x to 4  '
+
+'  >repeat infinite  '
+
+'  >repeat 10  '
 
  Current Version
 
