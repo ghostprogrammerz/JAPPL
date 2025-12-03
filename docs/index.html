@@ -11,6 +11,7 @@
             line-height: 1.6;
             background-color: #f9f9f9;
             color: #2c3e50;
+            position: relative;
         }
         h1 { font-size: 2rem; color: #2c3e50; }
         h2 { font-size: 1.5rem; margin-top: 2rem; }
@@ -34,9 +35,22 @@
             border-radius: 5px;
             overflow-x: auto;
         }
+        /* Logo styling */
+        .logo {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            width: 100px; /* adjust size as needed */
+            height: auto;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
+    <!-- Logo -->
+    <img src="logo.svg" alt="Jappl Logo" class="logo">
+
     <h1>Welcome to Jappl</h1>
     <p>Jappl is an open-source programming language currently in development.</p>
 
