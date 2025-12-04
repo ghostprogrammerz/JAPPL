@@ -2,162 +2,35 @@
 <html lang="en">
 <head>
     <meta name="google-site-verification" content="obx6L5ZDxnQH8NvBSKOf1fg8Jse1mUZwGOi5ELP7hBE" />
-    <meta charset="UTF-8">
-    <title>JAPPL</title>
-    <meta name="description" content="JAPPL - an open-source programming language in development">
-    <style>
-        body { 
-            font-family: sans-serif; 
-            padding: 2rem; 
-            line-height: 1.6;
-            background-color: #f9f9f9;
-            color: #2c3e50;
-            position: relative;
-            margin: 0;
-        }
-        header { margin-bottom: 1.5rem; }
-        .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
-
-        /* Navbar */
-        nav.site-nav {
-            background: #222;
-            color: #fff;
-            padding: 10px 20px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 1001;
-        }
-        nav.site-nav a {
-            color: #fff;
-            text-decoration: none;
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-        nav.site-nav a:hover { background: rgba(255,255,255,0.06); }
-        nav.site-nav a.active { background: #2980b9; }
-
-        h1 { font-size: 2rem; color: #2c3e50; margin: 0 0 0.5rem 0; }
-        h2 { font-size: 1.5rem; margin-top: 2rem; }
-        h3 { font-size: 1.2rem; margin-top: 1.5rem; }
-        a { color: #2980b9; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        button {
-            padding: 10px 20px;
-            background-color: #2980b9;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
-            margin: 0;
-        }
-        button:hover { background-color: #3498db; }
-        pre {
-            background-color: #f4f4f4;
-            padding: 10px;
-            border-radius: 5px;
-            overflow-x: auto;
-        }
-
-        /* Actions (buttons) */
-        .actions {
-            margin: 1rem 0 1.5rem 0;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        /* Logo styling */
-        .logo {
-            position: fixed;
-            top: 50%;
-            right: 20px;
-            transform: translateY(-50%);
-            width: 400px;
-            height: auto;
-            z-index: 1000;
-        }
-
-        /* Footer small */
-        .links ul { padding-left: 1.1rem; }
-        .links li { margin: 6px 0; }
-
-        @media (max-width: 900px) {
-            .logo { display: none; }
-            .container { padding: 1rem; }
-            nav.site-nav { gap: 8px; padding: 8px 12px; }
-        }
-    </style>
+  <title>JAPPL – Just Another Programming Platform/Language</title>
 </head>
-<body>
 
-    <!-- Navbar -->
-    <nav class="site-nav">
-      <a href="index.html" class="active">Home</a>
-      <a href="docs.html">Documentation</a>
-      <a href="tutorial.html">Tutorial</a>
-      <a href="examples.html">Example Code</a>
-      <!-- spacer -->
-      <div style="flex:1"></div>
-      <a href="https://scratch.mit.edu/projects/1084888676/" target="_blank" rel="noopener">Open on Scratch</a>
-      <a href="https://github.com/ghostprogrammerz/jappl" target="_blank" rel="noopener">GitHub</a>
-    </nav>
+<body style="font-family:Arial; margin:40px;">
 
-    <div class="container">
-      <img src="logo.svg" alt="Jappl Logo" class="logo">
+  <nav style="background:#222; padding:10px;">
+    <a href="index.html" style="color:white; margin-right:15px;">Home</a>
+    <a href="docs.html" style="color:white; margin-right:15px;">Documentation</a>
+    <a href="tutorial.html" style="color:white; margin-right:15px;">Tutorial</a>
+    <a href="examples.html" style="color:white;">Example Code</a>
+  </nav>
 
-      <header>
-          <h1>Welcome to Jappl</h1>
-          <p>Jappl is an open-source programming language currently in development.</p>
-      </header>
+  <h1>Welcome to JAPPL</h1>
+  <p>
+    JAPPL is a lightweight, syntax-tolerant programming language built inside Scratch.  
+    The goal is to make coding extremely easy for beginners without losing flexibility.
+  </p>
 
-      <section>
-        <h2>How to Use</h2>
-        <ol>
-            <li>Open the project in your browser using the buttons below.</li>
-            <li>Try out the sample code.</li>
-            <li>Have fun coding!</li>
-        </ol>
+  <h2>Latest Stable Version</h2>
+  <p><b>JAPPL 4.1.5 Stable</b><br>No known major bugs</p>
 
-        <!-- Buttons aligned properly -->
-        <div class="actions">
-            <a href="JAPPL 4.1.5.html">
-                <button type="button">Open Jappl</button>
-            </a>
-
-            <a href="examples.html">
-                <button type="button">Examples</button>
-            </a>
-        </div>
-      </section>
-
-      <section>
-        <h3>Sample Code</h3>
-        <pre><code>
->print hello!
->wait 1
->clear screen
->ask what do you wanna print?
->print you typed
->wait 0.5
->clear screen
->print [ask]
-        </code></pre>
-      </section>
-
-      <section class="links">
-        <h2>Links</h2>
-        <ul>
-            <li><a href="https://scratch.mit.edu/projects/1084888676/" target="_blank" rel="noopener">Main Project (Scratch)</a></li>
-            <li><a href="https://github.com/ghostprogrammerz/jappl" target="_blank" rel="noopener">GitHub Repo</a></li>
-            <li><a href="https://github.com/ghostprogrammerz/jappl" target="_blank" rel="noopener">Discussion & Documentation</a></li>
-        </ul>
-      </section>
-    </div>
+  <h2>What Makes JAPPL Special?</h2>
+  <ul>
+    <li>Very easy to learn</li>
+    <li>Syntax-tolerant</li>
+    <li>Variable system + operators + loops</li>
+    <li>Editable text engine</li>
+    <li>Fast compiler → executer structure</li>
+  </ul>
 
 </body>
 </html>
