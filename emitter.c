@@ -10,6 +10,32 @@
 /* ── simple growable string buffer ─────────────────────────────── */
 typedef struct { char *buf; int len; int cap; } Buf;
 
+const char *state_get_var(const StateTable *st, const char *name) {
+    if (!st) return NULL;
+    for (int i = 0; i < st->var_count; i++)
+        if (strcmp(st->vars[i].name, name) == 0) return st->vars[i].value;
+    return NULL;
+}
+
+const StateList *state_get_list(const StateTable *st, const char *name) {
+    if (!st) return NULL;
+    for (int i = 0; i < st->list_count; i++)
+        if (strcmp(st->lists[i].name, name) == 0) return &st->lists[i];
+    return NULL;
+}
+
+void state_table_free(StateTable *st) {
+    if (!st) return;
+    for (int i = 0; i < st->var_count; i++) { free(st->vars[i].name); free(st->vars[i].value); }
+    free(st->vars);
+    for (int i = 0; i < st->list_count; i++) {
+        free(st->lists[i].name);
+        for (int j = 0; j < st->lists[i].count; j++) free(st->lists[i].items[j]);
+        free(st->lists[i].items);
+    }
+    free(st->lists);
+}
+
 static void buf_init(Buf *b) {
     b->buf = malloc(4096);
     b->cap = 4096;
@@ -1222,7 +1248,8 @@ static const char BLANK_PNG_B64[] =
 
 /* ── sprite JSON ────────────────────────────────────────────────── */
 static void emit_sprite_json(Buf *out, Sprite *sp, Program *prog,
-                              int is_stage, double x_start, double *y_offset) {
+                              int is_stage, double x_start, double *y_offset,
+                              const StateTable *st) {
     BlockTable bt;
     btable_init(&bt);
 
@@ -1238,66 +1265,58 @@ static void emit_sprite_json(Buf *out, Sprite *sp, Program *prog,
     /* variables */
     buf_cat(out, "\"variables\":{");
     int first = 1;
+    #define EMIT_VAR(v) do { \
+        if (!first) buf_cat(out, ","); \
+        const char *_val = state_get_var(st, (v)->name); \
+        buf_json_str(out, (v)->name); buf_cat(out, ":["); \
+        buf_json_str(out, (v)->name); buf_cat(out, ","); \
+        buf_json_str(out, _val ? _val : "0"); \
+        buf_cat(out, "]"); \
+        first = 0; \
+    } while(0)
     if (is_stage) {
-        for (int i = 0; i < prog->global_count; i++) {
-            VarDecl *v = prog->globals[i];
-            if (!first) buf_cat(out, ",");
-            buf_json_str(out, v->name); buf_cat(out, ":[");
-            buf_json_str(out, v->name); buf_cat(out, ",\"0\"]");
-            first = 0;
-        }
+        for (int i = 0; i < prog->global_count; i++) EMIT_VAR(prog->globals[i]);
         for (int si = 0; si < prog->sprite_count; si++) {
             Sprite *s2 = prog->sprites[si];
-            for (int vi = 0; vi < s2->var_count; vi++) {
-                VarDecl *v = s2->vars[vi];
-                if (!v->is_global) continue;
-                if (!first) buf_cat(out, ",");
-                buf_json_str(out, v->name); buf_cat(out, ":[");
-                buf_json_str(out, v->name); buf_cat(out, ",\"0\"]");
-                first = 0;
-            }
+            for (int vi = 0; vi < s2->var_count; vi++)
+                if (s2->vars[vi]->is_global) EMIT_VAR(s2->vars[vi]);
         }
     } else {
-        for (int i = 0; i < sp->var_count; i++) {
-            VarDecl *v = sp->vars[i];
-            if (v->is_global) continue;
-            if (!first) buf_cat(out, ",");
-            buf_json_str(out, v->name); buf_cat(out, ":[");
-            buf_json_str(out, v->name); buf_cat(out, ",\"0\"]");
-            first = 0;
-        }
+        for (int i = 0; i < sp->var_count; i++)
+            if (!sp->vars[i]->is_global) EMIT_VAR(sp->vars[i]);
     }
+    #undef EMIT_VAR
     buf_cat(out, "},");
 
     /* lists */
     buf_cat(out, "\"lists\":{");
     first = 1;
+    #define EMIT_LIST(l) do { \
+        if (!first) buf_cat(out, ","); \
+        const StateList *_sl = state_get_list(st, (l)->name); \
+        buf_json_str(out, (l)->name); buf_cat(out, ":["); \
+        buf_json_str(out, (l)->name); buf_cat(out, ",["); \
+        if (_sl) { \
+            for (int _i = 0; _i < _sl->count; _i++) { \
+                if (_i) buf_cat(out, ","); \
+                buf_json_str(out, _sl->items[_i]); \
+            } \
+        } \
+        buf_cat(out, "]]"); \
+        first = 0; \
+    } while(0)
     if (is_stage) {
-        for (int i = 0; i < prog->global_list_count; i++) {
-            ListDecl *l = prog->global_lists[i];
-            if (!first) buf_cat(out, ",");
-            buf_json_str(out, l->name); buf_printf(out, ":["); buf_json_str(out, l->name); buf_cat(out, ",[]]");
-            first = 0;
-        }
+        for (int i = 0; i < prog->global_list_count; i++) EMIT_LIST(prog->global_lists[i]);
         for (int si = 0; si < prog->sprite_count; si++) {
             Sprite *s2 = prog->sprites[si];
-            for (int li = 0; li < s2->list_count; li++) {
-                ListDecl *l = s2->lists[li];
-                if (!l->is_global) continue;
-                if (!first) buf_cat(out, ",");
-                buf_json_str(out, l->name); buf_cat(out, ":["); buf_json_str(out, l->name); buf_cat(out, ",[]]");
-                first = 0;
-            }
+            for (int li = 0; li < s2->list_count; li++)
+                if (s2->lists[li]->is_global) EMIT_LIST(s2->lists[li]);
         }
     } else {
-        for (int i = 0; i < sp->list_count; i++) {
-            ListDecl *l = sp->lists[i];
-            if (l->is_global) continue;
-            if (!first) buf_cat(out, ",");
-            buf_json_str(out, l->name); buf_cat(out, ":["); buf_json_str(out, l->name); buf_cat(out, ",[]]");
-            first = 0;
-        }
+        for (int i = 0; i < sp->list_count; i++)
+            if (!sp->lists[i]->is_global) EMIT_LIST(sp->lists[i]);
     }
+    #undef EMIT_LIST
     buf_cat(out, "},");
 
     buf_cat(out, "\"broadcasts\":{},");
@@ -1328,7 +1347,7 @@ static void emit_sprite_json(Buf *out, Sprite *sp, Program *prog,
 }
 
 /* ── project.json ───────────────────────────────────────────────── */
-int emit_project_json(Program *prog, char **buf_out) {
+int emit_project_json_with_state(Program *prog, char **buf_out, const StateTable *st) {
     Buf out;
     buf_init(&out);
 
@@ -1344,7 +1363,7 @@ int emit_project_json(Program *prog, char **buf_out) {
     if (!stage) {
         stage = sprite_new(NULL, 1);
     }
-    emit_sprite_json(&out, stage, prog, 1, 0, NULL);
+    emit_sprite_json(&out, stage, prog, 1, 0, NULL, st);
     buf_cat(&out, "\"volume\":100,\"visible\":true,\"x\":0,\"y\":0,\"size\":100,"
                   "\"direction\":90,\"draggable\":false,\"rotationStyle\":\"all around\"}");
 
@@ -1355,7 +1374,7 @@ int emit_project_json(Program *prog, char **buf_out) {
         buf_cat(&out, ",{\"isStage\":false,");
         buf_cat(&out, "\"name\":"); buf_json_str(&out, sp->name ? sp->name : "Sprite");
         buf_printf(&out, ",\"layerOrder\":%d,", layer++);
-        emit_sprite_json(&out, sp, prog, 0, (i+1)*200.0, NULL);
+        emit_sprite_json(&out, sp, prog, 0, (i+1)*200.0, NULL, st);
         buf_printf(&out,
             "\"volume\":100,\"visible\":true,\"x\":%.0f,\"y\":0,\"size\":100,"
             "\"direction\":90,\"draggable\":false,\"rotationStyle\":\"all around\"}",
@@ -1368,6 +1387,10 @@ int emit_project_json(Program *prog, char **buf_out) {
 
     *buf_out = out.buf;
     return 0;
+}
+
+int emit_project_json(Program *prog, char **buf_out) {
+    return emit_project_json_with_state(prog, buf_out, NULL);
 }
 
 /* ── zip writer ──────────────────────────────────────────────────── */
@@ -1442,9 +1465,9 @@ static int zip_add_file(ByteBuf *z, const char *name,
     return offset;
 }
 
-int emit_sb3(Program *prog, const char *path) {
+int emit_sb3_with_state(Program *prog, const char *path, const StateTable *st) {
     char *json = NULL;
-    if (emit_project_json(prog, &json) != 0) return -1;
+    if (emit_project_json_with_state(prog, &json, st) != 0) return -1;
 
     unsigned char png[256];
     int png_len = b64decode(BLANK_PNG_B64, png);
@@ -1508,4 +1531,8 @@ int emit_sb3(Program *prog, const char *path) {
     free(json);
     free(z.data);
     return 0;
+}
+
+int emit_sb3(Program *prog, const char *path) {
+    return emit_sb3_with_state(prog, path, NULL);
 }
