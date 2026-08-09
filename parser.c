@@ -145,7 +145,7 @@ static int is_structured_expr_start(Parser *p) {
                             "random","edge","sensing","color","current",
                             "x","y","direction","size","volume","loudness",
                             "username","online","days","costume","backdrop",
-                            "touching","item",NULL};
+                            "touching","item","variable","list",NULL};
         for (int i = 0; kw[i]; i++)
             if (strcmp(cur(p).value, kw[i]) == 0) return 1;
     }
@@ -155,7 +155,17 @@ static int is_structured_expr_start(Parser *p) {
 static Expr *parse_atom(Parser *p) {
     int line = cur(p).line;
 
-    /* variable [name with spaces] */
+    /* variable (name) */
+    if (check(p, TOK_IDENT) && strcmp(cur(p).value, "variable") == 0) {
+        advance(p);
+        expect(p, TOK_LPAREN);
+        char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+        expect(p, TOK_RPAREN);
+        Expr *e = expr_new(EXPR_VAR, line);
+        e->str = name;
+        return e;
+    }
+    /* legacy [name with spaces] — kept for backward compat */
     if (check(p, TOK_LBRACKET)) {
         advance(p);
         char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
@@ -220,20 +230,57 @@ static Expr *parse_atom(Parser *p) {
         return e;
     }
 
-    /* join (a) (b) - handle multiple arguments by chaining */
+    /* join((a) + (b)) new style, or join (a) (b) old style */
     if (check(p, TOK_IDENT) && strcmp(cur(p).value, "join") == 0) {
         advance(p);
-        Expr *left = parse_paren_expr(p);
-        Expr *right = parse_paren_expr(p);
-        Expr *e = expr_new(EXPR_JOIN, line);
-        e->pair.a = left; e->pair.b = right;
-        while (check(p, TOK_LPAREN) || is_structured_expr_start(p)) {
-            Expr *next = parse_paren_expr(p);
-            Expr *new_e = expr_new(EXPR_JOIN, line);
-            new_e->pair.a = e;
-            new_e->pair.b = next;
-            e = new_e;
+        /* new style: join((a) + (b)) — single paren containing a binop */
+        if (check(p, TOK_LPAREN)) {
+            Token nx = peek(p);
+            /* peek inside: if after '(' we see '(' (structured start), it might be new style */
+            /* parse one paren_expr and check if result is a BINOP(+) */
+            Expr *first = parse_paren_expr(p);
+            if (first->type == EXPR_BINOP && strcmp(first->binop.op, "+") == 0) {
+                /* convert top-level + chain into nested JOINs */
+                Expr *e = expr_new(EXPR_JOIN, line);
+                e->pair.a = first->binop.left;
+                e->pair.b = first->binop.right;
+                free(first);
+                /* handle more chained + args */
+                while (check(p, TOK_LPAREN) || is_structured_expr_start(p)) {
+                    Expr *next = parse_paren_expr(p);
+                    if (next->type == EXPR_BINOP && strcmp(next->binop.op, "+") == 0) {
+                        Expr *inner = expr_new(EXPR_JOIN, line);
+                        inner->pair.a = next->binop.left;
+                        inner->pair.b = next->binop.right;
+                        free(next);
+                        next = inner;
+                    }
+                    Expr *new_e = expr_new(EXPR_JOIN, line);
+                    new_e->pair.a = e;
+                    new_e->pair.b = next;
+                    e = new_e;
+                }
+                return e;
+            }
+            /* old style: first arg already parsed, get second */
+            Expr *right = parse_paren_expr(p);
+            Expr *e = expr_new(EXPR_JOIN, line);
+            e->pair.a = first; e->pair.b = right;
+            while (check(p, TOK_LPAREN) || is_structured_expr_start(p)) {
+                Expr *next = parse_paren_expr(p);
+                Expr *new_e = expr_new(EXPR_JOIN, line);
+                new_e->pair.a = e;
+                new_e->pair.b = next;
+                e = new_e;
+            }
+            return e;
         }
+        /* no paren at all — error fallback */
+        Expr *e = expr_new(EXPR_JOIN, line);
+        e->pair.a = expr_new(EXPR_STRING, line);
+        e->pair.a->str = strdup("");
+        e->pair.b = expr_new(EXPR_STRING, line);
+        e->pair.b->str = strdup("");
         return e;
     }
 
@@ -273,6 +320,15 @@ static Expr *parse_atom(Parser *p) {
         }
         advance(p);
         expect(p, TOK_OF);
+        if (check(p, TOK_LIST)) {
+            advance(p);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            expect(p, TOK_RPAREN);
+            Expr *e = expr_new(EXPR_LIST_LENGTH, line);
+            e->list_len.list = strdup(name);
+            return e;
+        }
         if (check(p, TOK_LANGLE)) {
             advance(p);
             char *name = read_name_until(p, TOK_RANGLE, TOK_EOF);
@@ -312,26 +368,34 @@ static Expr *parse_atom(Parser *p) {
             Expr *val = parse_expr(p);
             expect(p, TOK_RPAREN);
             expect(p, TOK_OF);
+            if (check(p, TOK_LIST)) advance(p);
+            if (check(p, TOK_LPAREN)) {
+                advance(p);
+                char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+                Expr *e = expr_new(EXPR_LIST_ITEM_NUM, line);
+                e->list_item.list = strdup(name); e->list_item.index = val; return e;
+            }
             expect(p, TOK_LANGLE);
-            char *name = read_name_until(p, TOK_RANGLE, TOK_EOF);
-            expect(p, TOK_RANGLE);
+            char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
             Expr *e = expr_new(EXPR_LIST_ITEM_NUM, line);
-            e->list_item.list = strdup(name);
-            e->list_item.index = val;
-            return e;
+            e->list_item.list = strdup(name); e->list_item.index = val; return e;
         }
         advance(p);
         expect(p, TOK_LPAREN);
         Expr *idx = parse_expr(p);
         expect(p, TOK_RPAREN);
         expect(p, TOK_OF);
+        if (check(p, TOK_LIST)) advance(p);
+        if (check(p, TOK_LPAREN)) {
+            advance(p);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            Expr *e = expr_new(EXPR_LIST_ITEM, line);
+            e->list_item.list = strdup(name); e->list_item.index = idx; return e;
+        }
         expect(p, TOK_LANGLE);
-        char *name = read_name_until(p, TOK_RANGLE, TOK_EOF);
-        expect(p, TOK_RANGLE);
+        char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
         Expr *e = expr_new(EXPR_LIST_ITEM, line);
-        e->list_item.list = strdup(name);
-        e->list_item.index = idx;
-        return e;
+        e->list_item.list = strdup(name); e->list_item.index = idx; return e;
     }
 
     /* math functions */
@@ -566,6 +630,29 @@ static Expr *parse_atom(Parser *p) {
         Expr *e = expr_new(EXPR_VAR, line);
         e->str = strdup("sensing");
         advance(p);
+        return e;
+    }
+
+    /* list (name) contains (x) */
+    if (check(p, TOK_LIST)) {
+        advance(p);
+        expect(p, TOK_LPAREN);
+        char *lname = read_name_until(p, TOK_RPAREN, TOK_EOF);
+        expect(p, TOK_RPAREN);
+        if (check(p, TOK_CONTAINS)) {
+            advance(p);
+            Expr *item = parse_paren_expr(p);
+            Expr *e = expr_new(EXPR_LIST_LENGTH, line); /* reuse as placeholder */
+            /* Actually use LIST_CONTAINS */
+            free(e);
+            e = expr_new(EXPR_LIST_CONTAINS, line);
+            e->list_contains.list = lname;
+            e->list_contains.val  = item;
+            return e;
+        }
+        /* bare list (name) — return as string */
+        Expr *e = expr_new(EXPR_STRING, line);
+        e->str = lname;
         return e;
     }
 
@@ -961,6 +1048,18 @@ static Stmt *parse_stmt(Parser *p) {
             if (check(p, TOK_PERCENT)) advance(p);
             return s;
         }
+        if (check(p, TOK_IDENT) && strcmp(cur(p).value, "variable") == 0) {
+            advance(p);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            expect(p, TOK_RPAREN);
+            expect(p, TOK_TO);
+            Stmt *s = stmt_new(STMT_SET_VAR, line);
+            s->name = name;
+            s->a = parse_paren_expr(p);
+            return s;
+        }
+        /* legacy set [name] to */
         if (check(p, TOK_LBRACKET)) {
             advance(p);
             char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
@@ -1050,6 +1149,18 @@ static Stmt *parse_stmt(Parser *p) {
             advance(p); expect(p, TOK_BY);
             Stmt *s = stmt_new(STMT_CHANGE_VOLUME, line); s->a = parse_paren_expr(p); return s;
         }
+        if (check(p, TOK_IDENT) && strcmp(cur(p).value, "variable") == 0) {
+            advance(p);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            expect(p, TOK_RPAREN);
+            expect(p, TOK_BY);
+            Stmt *s = stmt_new(STMT_CHANGE_VAR, line);
+            s->name = name;
+            s->a = parse_paren_expr(p);
+            return s;
+        }
+        /* legacy change [name] by */
         if (check(p, TOK_LBRACKET)) {
             advance(p);
             char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
@@ -1121,7 +1232,7 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_FOR)) {
             advance(p);
             Expr *secs = parse_paren_expr(p);
-            if (check(p, TOK_SECONDS)) advance(p);
+            if (check(p, TOK_SECONDS) || (check(p, TOK_IDENT) && strcmp(cur(p).value, "second") == 0)) advance(p);
             Stmt *s = stmt_new(STMT_SAY_SECS, line); s->a = msg; s->secs = secs; return s;
         }
         Stmt *s = stmt_new(STMT_SAY, line); s->a = msg; return s;
@@ -1132,7 +1243,7 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_FOR)) {
             advance(p);
             Expr *secs = parse_paren_expr(p);
-            if (check(p, TOK_SECONDS)) advance(p);
+            if (check(p, TOK_SECONDS) || (check(p, TOK_IDENT) && strcmp(cur(p).value, "second") == 0)) advance(p);
             Stmt *s = stmt_new(STMT_THINK_SECS, line); s->a = msg; s->secs = secs; return s;
         }
         Stmt *s = stmt_new(STMT_THINK, line); s->a = msg; return s;
@@ -1173,15 +1284,15 @@ static Stmt *parse_stmt(Parser *p) {
         advance(p);
         if (check(p, TOK_IDENT) && strcmp(cur(p).value, "variable") == 0) {
             advance(p);
-            expect(p, TOK_LBRACKET);
-            char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
-            expect(p, TOK_RBRACKET);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            expect(p, TOK_RPAREN);
             Stmt *s = stmt_new(STMT_SHOW_VAR, line); s->name = name; return s;
         }
         if (check(p, TOK_LIST)) {
             advance(p);
-            expect(p, TOK_LANGLE);
-            char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
             Stmt *s = stmt_new(STMT_SHOW_LIST, line); s->name = strdup(name); return s;
         }
         return stmt_new(STMT_SHOW, line);
@@ -1190,15 +1301,15 @@ static Stmt *parse_stmt(Parser *p) {
         advance(p);
         if (check(p, TOK_IDENT) && strcmp(cur(p).value, "variable") == 0) {
             advance(p);
-            expect(p, TOK_LBRACKET);
-            char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
-            expect(p, TOK_RBRACKET);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            expect(p, TOK_RPAREN);
             Stmt *s = stmt_new(STMT_HIDE_VAR, line); s->name = name; return s;
         }
         if (check(p, TOK_LIST)) {
             advance(p);
-            expect(p, TOK_LANGLE);
-            char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
+            expect(p, TOK_LPAREN);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
             Stmt *s = stmt_new(STMT_HIDE_LIST, line); s->name = strdup(name); return s;
         }
         return stmt_new(STMT_HIDE, line);
@@ -1243,6 +1354,8 @@ static Stmt *parse_stmt(Parser *p) {
     /* ── events ── */
     if (check(p, TOK_IDENT) && strcmp(cur(p).value, "broadcast") == 0) {
         advance(p);
+        /* new: broadcast message (name) */
+        if (check(p, TOK_IDENT) && strcmp(cur(p).value, "message") == 0) advance(p);
         expect(p, TOK_LPAREN);
         char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
         expect(p, TOK_RPAREN);
@@ -1270,6 +1383,15 @@ static Stmt *parse_stmt(Parser *p) {
         advance(p);
         Expr *item = parse_paren_expr(p);
         expect(p, TOK_TO);
+        /* new: "list (name)" or legacy "<name>" */
+        if (check(p, TOK_LIST)) advance(p);
+        if (check(p, TOK_LPAREN)) {
+            advance(p);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            expect(p, TOK_RPAREN);
+            Stmt *s = stmt_new(STMT_LIST_ADD, line);
+            s->name = strdup(name); s->a = item; return s;
+        }
         expect(p, TOK_LANGLE);
         char *name = read_name_until(p, TOK_RANGLE, TOK_EOF);
         expect(p, TOK_RANGLE);
@@ -1289,12 +1411,24 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_IDENT) && strcmp(cur(p).value, "all") == 0) {
             advance(p);
             if (check(p, TOK_OF)) advance(p);
+            if (check(p, TOK_LIST)) advance(p);
+            if (check(p, TOK_LPAREN)) {
+                advance(p);
+                char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+                Stmt *s = stmt_new(STMT_LIST_DELETE_ALL, line); s->name = strdup(name); return s;
+            }
             expect(p, TOK_LANGLE);
             char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
             Stmt *s = stmt_new(STMT_LIST_DELETE_ALL, line); s->name = strdup(name); return s;
         }
         Expr *idx = parse_paren_expr(p);
         expect(p, TOK_OF);
+        if (check(p, TOK_LIST)) advance(p);
+        if (check(p, TOK_LPAREN)) {
+            advance(p);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            Stmt *s = stmt_new(STMT_LIST_DELETE, line); s->name = strdup(name); s->a = idx; return s;
+        }
         expect(p, TOK_LANGLE);
         char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
         Stmt *s = stmt_new(STMT_LIST_DELETE, line); s->name = strdup(name); s->a = idx; return s;
@@ -1305,6 +1439,13 @@ static Stmt *parse_stmt(Parser *p) {
         expect(p, TOK_AT);
         Expr *idx = parse_paren_expr(p);
         expect(p, TOK_OF);
+        if (check(p, TOK_LIST)) advance(p);
+        if (check(p, TOK_LPAREN)) {
+            advance(p);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            Stmt *s = stmt_new(STMT_LIST_INSERT, line);
+            s->name = strdup(name); s->a = item; s->b = idx; return s;
+        }
         expect(p, TOK_LANGLE);
         char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
         Stmt *s = stmt_new(STMT_LIST_INSERT, line);
@@ -1315,6 +1456,15 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_IDENT) && strcmp(cur(p).value, "item") == 0) advance(p);
         Expr *idx = parse_paren_expr(p);
         expect(p, TOK_OF);
+        if (check(p, TOK_LIST)) advance(p);
+        if (check(p, TOK_LPAREN)) {
+            advance(p);
+            char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            expect(p, TOK_WITH);
+            Expr *val = parse_paren_expr(p);
+            Stmt *s = stmt_new(STMT_LIST_REPLACE, line);
+            s->name = strdup(name); s->a = idx; s->b = val; return s;
+        }
         expect(p, TOK_LANGLE);
         char *name = read_name_until(p, TOK_RANGLE, TOK_EOF); expect(p, TOK_RANGLE);
         expect(p, TOK_WITH);
@@ -1451,9 +1601,9 @@ static Stmt *parse_stmt(Parser *p) {
 static VarDecl *parse_var_decl(Parser *p) {
     int line = cur(p).line;
     expect(p, TOK_VAR);
-    expect(p, TOK_LBRACKET);
-    char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
-    expect(p, TOK_RBRACKET);
+    expect(p, TOK_LPAREN);
+    char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+    expect(p, TOK_RPAREN);
     VarDecl *d = calloc(1, sizeof(VarDecl));
     d->name = name;
     d->line = line;
@@ -1468,9 +1618,9 @@ static VarDecl *parse_var_decl(Parser *p) {
 static ListDecl *parse_list_decl(Parser *p) {
     int line = cur(p).line;
     expect(p, TOK_LIST);
-    expect(p, TOK_LANGLE);
-    char *name = read_name_until(p, TOK_RANGLE, TOK_EOF);
-    expect(p, TOK_RANGLE);
+    expect(p, TOK_LPAREN);
+    char *name = read_name_until(p, TOK_RPAREN, TOK_EOF);
+    expect(p, TOK_RPAREN);
     ListDecl *d = calloc(1, sizeof(ListDecl));
     d->name = strdup(name);
     d->line = line;
@@ -1532,6 +1682,7 @@ static Script *parse_script(Parser *p) {
             if (check(p, TOK_IDENT) && strcmp(cur(p).value, "flag") == 0) advance(p);
             hat = HAT_GREEN_FLAG;
         } else if (check(p, TOK_IDENT) && strcmp(cur(p).value, "message") == 0) {
+            /* legacy: when (message name) */
             advance(p);
             hat_arg = read_name_until(p, TOK_RPAREN, TOK_EOF);
             hat = HAT_MESSAGE;
@@ -1546,9 +1697,15 @@ static Script *parse_script(Parser *p) {
             while (check(p, TOK_IDENT) || check(p, TOK_SPRITE)) advance(p);
             hat = HAT_SPRITE_CLICKED;
         } else if (check(p, TOK_IDENT) && strcmp(cur(p).value, "start") == 0) {
-            advance(p);
-            while (check(p, TOK_IDENT)) advance(p);
-            hat = HAT_CLONE_START;
+            Token nx = peek(p);
+            if (nx.type == TOK_IDENT && strcmp(nx.value, "as") == 0) {
+                advance(p);
+                while (check(p, TOK_IDENT)) advance(p);
+                hat = HAT_CLONE_START;
+            } else {
+                hat_arg = read_name_until(p, TOK_RPAREN, TOK_EOF);
+                hat = HAT_MESSAGE;
+            }
         } else if (check(p, TOK_IDENT) && strcmp(cur(p).value, "backdrop") == 0) {
             advance(p);
             if (check(p, TOK_IDENT) && strcmp(cur(p).value, "switches") == 0) advance(p);
@@ -1569,8 +1726,9 @@ static Script *parse_script(Parser *p) {
             parse_body(p, &sc2->body, &sc2->body_count);
             return sc2;
         } else {
-            error(p, line, "unknown hat event");
+            /* new syntax: when (messageName) — bare name is the message */
             hat_arg = read_name_until(p, TOK_RPAREN, TOK_EOF);
+            hat = HAT_MESSAGE;
         }
         expect(p, TOK_RPAREN);
 
@@ -1602,15 +1760,24 @@ static Sprite *parse_sprite(Parser *p) {
     }
 
     char name_buf[256] = {0};
-    int first = 1;
-    while (!check(p, TOK_LBRACE) && !check(p, TOK_EOF)) {
-        if (!first) strncat(name_buf, " ", sizeof(name_buf)-strlen(name_buf)-1);
-        strncat(name_buf, cur(p).value ? cur(p).value : "", sizeof(name_buf)-strlen(name_buf)-1);
-        first = 0;
+    if (check(p, TOK_LPAREN)) {
         advance(p);
+        char *n = read_name_until(p, TOK_RPAREN, TOK_EOF);
+        strncpy(name_buf, n, sizeof(name_buf)-1);
+        free(n);
+        expect(p, TOK_RPAREN);
+    } else {
+        /* fallback: read until '{' for compatibility */
+        int first = 1;
+        while (!check(p, TOK_LBRACE) && !check(p, TOK_EOF)) {
+            if (!first) strncat(name_buf, " ", sizeof(name_buf)-strlen(name_buf)-1);
+            strncat(name_buf, cur(p).value ? cur(p).value : "", sizeof(name_buf)-strlen(name_buf)-1);
+            first = 0;
+            advance(p);
+        }
+        int len = strlen(name_buf);
+        while (len > 0 && isspace((unsigned char)name_buf[len-1])) name_buf[--len] = '\0';
     }
-    int len = strlen(name_buf);
-    while (len > 0 && isspace((unsigned char)name_buf[len-1])) name_buf[--len] = '\0';
 
     Sprite *sp = sprite_new(is_stage ? NULL : name_buf, is_stage);
     expect(p, TOK_LBRACE);

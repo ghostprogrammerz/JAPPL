@@ -345,11 +345,11 @@ static void decompile_input_expr(Buf *out, JVal *blocks, JVal *input_arr) {
             return;
         }
         if (strcmp(op,"operator_join")==0)     {
-            buf_cat(out,"join (");
+            buf_cat(out,"join((");
             decompile_input_expr(out,blocks,jobj_get(inputs,"STRING1"));
-            buf_cat(out,") (");
+            buf_cat(out,") + (");
             decompile_input_expr(out,blocks,jobj_get(inputs,"STRING2"));
-            buf_cat(out,")");
+            buf_cat(out,"))");
             return;
         }
         if (strcmp(op,"operator_letter_of")==0){
@@ -496,24 +496,24 @@ static void decompile_input_expr(Buf *out, JVal *blocks, JVal *input_arr) {
         /* variable reporter */
         if (strcmp(op,"data_variable")==0){
             JVal *vf=jobj_get(fields,"VARIABLE");
-            buf_printf(out,"[%s]",jstr(jarr_get(vf,0)));
+            buf_printf(out,"variable (%s)",jstr(jarr_get(vf,0)));
             return;
         }
         if (strcmp(op,"data_itemoflist")==0){
             JVal *lf=jobj_get(fields,"LIST");
             buf_cat(out,"item (");
             decompile_input_expr(out,blocks,jobj_get(inputs,"INDEX"));
-            buf_printf(out,") of <%s>",jstr(jarr_get(lf,0)));
+            buf_printf(out,") of list (%s)",jstr(jarr_get(lf,0)));
             return;
         }
         if (strcmp(op,"data_lengthoflist")==0){
             JVal *lf=jobj_get(fields,"LIST");
-            buf_printf(out,"length of <%s>",jstr(jarr_get(lf,0)));
+            buf_printf(out,"length of list (%s)",jstr(jarr_get(lf,0)));
             return;
         }
         if (strcmp(op,"data_listcontainsitem")==0){
             JVal *lf=jobj_get(fields,"LIST");
-            buf_printf(out,"<%s> contains (",jstr(jarr_get(lf,0)));
+            buf_printf(out,"list (%s) contains (",jstr(jarr_get(lf,0)));
             decompile_input_expr(out,blocks,jobj_get(inputs,"ITEM"));
             buf_cat(out,")");
             return;
@@ -522,7 +522,7 @@ static void decompile_input_expr(Buf *out, JVal *blocks, JVal *input_arr) {
             JVal *lf=jobj_get(fields,"LIST");
             buf_cat(out,"item num (");
             decompile_input_expr(out,blocks,jobj_get(inputs,"ITEM"));
-            buf_printf(out,") of <%s>",jstr(jarr_get(lf,0)));
+            buf_printf(out,") of list (%s)",jstr(jarr_get(lf,0)));
             return;
         }
         /* argument reporter */
@@ -687,7 +687,7 @@ static void decompile_block(Buf *out, JVal *blocks, const char *uid, int depth) 
         JVal *mb=jobj_get(blocks,muid);
         JVal *minp=mb?jobj_get(jobj_get(mb,"inputs"),"BROADCAST_OPTION"):NULL;
         JVal *mf=mb?jobj_get(jobj_get(mb,"fields"),"BROADCAST_OPTION"):NULL;
-        buf_printf(out,"broadcast (%s)%s\n",minp?jstr(jarr_get(minp,0)):jstr(jarr_get(mf,0)),
+        buf_printf(out,"broadcast message (%s)%s\n",minp?jstr(jarr_get(minp,0)):jstr(jarr_get(mf,0)),
             strcmp(op,"event_broadcastandwait")==0?" and wait":"");
         return;
     }
@@ -747,43 +747,43 @@ static void decompile_block(Buf *out, JVal *blocks, const char *uid, int depth) 
     /* ── variables ── */
     if (strcmp(op,"data_setvariableto")==0) {
         JVal *vf=jobj_get(fields,"VARIABLE");
-        buf_printf(out,"set [%s] to ",jstr(jarr_get(vf,0)));
+        buf_printf(out,"set variable (%s) to ",jstr(jarr_get(vf,0)));
         emit_input(out,blocks,inputs,"VALUE"); buf_cat(out,"\n"); return;
     }
     if (strcmp(op,"data_changevariableby")==0) {
         JVal *vf=jobj_get(fields,"VARIABLE");
-        buf_printf(out,"change [%s] by ",jstr(jarr_get(vf,0)));
+        buf_printf(out,"change variable (%s) by ",jstr(jarr_get(vf,0)));
         emit_input(out,blocks,inputs,"VALUE"); buf_cat(out,"\n"); return;
     }
-    if (strcmp(op,"data_showvariable")==0) { JVal *vf=jobj_get(fields,"VARIABLE"); buf_printf(out,"show variable [%s]\n",jstr(jarr_get(vf,0))); return; }
-    if (strcmp(op,"data_hidevariable")==0) { JVal *vf=jobj_get(fields,"VARIABLE"); buf_printf(out,"hide variable [%s]\n",jstr(jarr_get(vf,0))); return; }
+    if (strcmp(op,"data_showvariable")==0) { JVal *vf=jobj_get(fields,"VARIABLE"); buf_printf(out,"show variable (%s)\n",jstr(jarr_get(vf,0))); return; }
+    if (strcmp(op,"data_hidevariable")==0) { JVal *vf=jobj_get(fields,"VARIABLE"); buf_printf(out,"hide variable (%s)\n",jstr(jarr_get(vf,0))); return; }
 
     /* ── lists ── */
     if (strcmp(op,"data_addtolist")==0) {
         JVal *lf=jobj_get(fields,"LIST");
         buf_cat(out,"add "); emit_input(out,blocks,inputs,"ITEM");
-        buf_printf(out," to <%s>\n",jstr(jarr_get(lf,0))); return;
+        buf_printf(out," to list (%s)\n",jstr(jarr_get(lf,0))); return;
     }
     if (strcmp(op,"data_deleteoflist")==0) {
         JVal *lf=jobj_get(fields,"LIST");
         buf_cat(out,"delete "); emit_input(out,blocks,inputs,"INDEX");
-        buf_printf(out," of <%s>\n",jstr(jarr_get(lf,0))); return;
+        buf_printf(out," of list (%s)\n",jstr(jarr_get(lf,0))); return;
     }
-    if (strcmp(op,"data_deletealloflist")==0)  { JVal *lf=jobj_get(fields,"LIST"); buf_printf(out,"delete all of <%s>\n",jstr(jarr_get(lf,0))); return; }
+    if (strcmp(op,"data_deletealloflist")==0)  { JVal *lf=jobj_get(fields,"LIST"); buf_printf(out,"delete all of list (%s)\n",jstr(jarr_get(lf,0))); return; }
     if (strcmp(op,"data_insertatlist")==0) {
         JVal *lf=jobj_get(fields,"LIST");
         buf_cat(out,"insert "); emit_input(out,blocks,inputs,"ITEM");
         buf_cat(out," at "); emit_input(out,blocks,inputs,"INDEX");
-        buf_printf(out," of <%s>\n",jstr(jarr_get(lf,0))); return;
+        buf_printf(out," of list (%s)\n",jstr(jarr_get(lf,0))); return;
     }
     if (strcmp(op,"data_replaceitemoflist")==0) {
         JVal *lf=jobj_get(fields,"LIST");
         buf_cat(out,"replace item "); emit_input(out,blocks,inputs,"INDEX");
-        buf_printf(out," of <%s> with ",jstr(jarr_get(lf,0)));
+        buf_printf(out," of list (%s) with ",jstr(jarr_get(lf,0)));
         emit_input(out,blocks,inputs,"ITEM"); buf_cat(out,"\n"); return;
     }
-    if (strcmp(op,"data_showlist")==0) { JVal *lf=jobj_get(fields,"LIST"); buf_printf(out,"show list <%s>\n",jstr(jarr_get(lf,0))); return; }
-    if (strcmp(op,"data_hidelist")==0) { JVal *lf=jobj_get(fields,"LIST"); buf_printf(out,"hide list <%s>\n",jstr(jarr_get(lf,0))); return; }
+    if (strcmp(op,"data_showlist")==0) { JVal *lf=jobj_get(fields,"LIST"); buf_printf(out,"show list (%s)\n",jstr(jarr_get(lf,0))); return; }
+    if (strcmp(op,"data_hidelist")==0) { JVal *lf=jobj_get(fields,"LIST"); buf_printf(out,"hide list (%s)\n",jstr(jarr_get(lf,0))); return; }
 
     /* ── custom blocks ── */
     if (strcmp(op,"procedures_call")==0) {
@@ -906,7 +906,7 @@ static void decompile_hat(Buf *out, JVal *blocks, const char *uid, int depth) {
         buf_cat(out,"when (green flag)\n");
     } else if (strcmp(op,"event_whenbroadcastreceived")==0) {
         JVal *bf=jobj_get(fields,"BROADCAST_OPTION");
-        buf_printf(out,"when (message %s)\n",jstr(jarr_get(bf,0)));
+        buf_printf(out,"when (%s)\n",jstr(jarr_get(bf,0)));
     } else if (strcmp(op,"event_whenkeypressed")==0) {
         JVal *kf=jobj_get(fields,"KEY_OPTION");
         buf_printf(out,"when (key %s pressed)\n",jstr(jarr_get(kf,0)));
@@ -966,7 +966,7 @@ static void decompile_hat(Buf *out, JVal *blocks, const char *uid, int depth) {
                produces a visible top-level block on the Scratch canvas. */
             buf_indent(out, depth); buf_cat(out,"{\n");
             buf_indent(out, depth+1); buf_printf(out,"// was: %s\n", op);
-            buf_indent(out, depth+1); buf_cat(out,"set [my variable] to 0\n");
+            buf_indent(out, depth+1); buf_cat(out,"set variable (my variable) to (0)\n");
             buf_indent(out, depth); buf_cat(out,"}\n\n");
         } else {
             buf_printf(out,"// floating: %s\n", op);
@@ -1000,7 +1000,7 @@ static void decompile_target(Buf *out, JVal *target, int is_stage,
                 JVal *varr = variables->obj.pairs[i].val;
                 const char *vname = (varr&&varr->type==JArr&&varr->arr.count>0&&varr->arr.items[0]->type==JStr)
                     ? varr->arr.items[0]->string : variables->obj.pairs[i].key;
-                buf_printf(out,"var [%s]\n", vname);
+                buf_printf(out,"var (%s)\n", vname);
             }
         }
         if (lists) {
@@ -1008,7 +1008,7 @@ static void decompile_target(Buf *out, JVal *target, int is_stage,
                 JVal *larr = lists->obj.pairs[i].val;
                 const char *lname = (larr&&larr->type==JArr&&larr->arr.count>0&&larr->arr.items[0]->type==JStr)
                     ? larr->arr.items[0]->string : lists->obj.pairs[i].key;
-                buf_printf(out,"list <%s>\n", lname);
+                buf_printf(out,"list (%s)\n", lname);
             }
         }
         if ((variables&&variables->obj.count)||(lists&&lists->obj.count))
@@ -1032,7 +1032,7 @@ static void decompile_target(Buf *out, JVal *target, int is_stage,
         return;
     }
 
-    buf_printf(out,"sprite %s\n{\n", name);
+    buf_printf(out,"sprite (%s)\n{\n", name);
 
     JVal *stage_vars  = stage_target ? jobj_get(stage_target,"variables") : NULL;
     JVal *stage_lists = stage_target ? jobj_get(stage_target,"lists")     : NULL;
@@ -1045,7 +1045,7 @@ static void decompile_target(Buf *out, JVal *target, int is_stage,
             if (stage_vars)
                 for (int j=0;j<stage_vars->obj.count;j++)
                     if (strcmp(stage_vars->obj.pairs[j].key,variables->obj.pairs[i].key)==0) { is_global=1; break; }
-            if (!is_global) buf_printf(out,"    var [%s]\n", vname);
+            if (!is_global) buf_printf(out,"    var (%s)\n", vname);
         }
     }
     if (lists) {
@@ -1057,7 +1057,7 @@ static void decompile_target(Buf *out, JVal *target, int is_stage,
             if (stage_lists)
                 for (int j=0;j<stage_lists->obj.count;j++)
                     if (strcmp(stage_lists->obj.pairs[j].key,lists->obj.pairs[i].key)==0) { is_global=1; break; }
-            if (!is_global) buf_printf(out,"    list <%s>\n", lname);
+            if (!is_global) buf_printf(out,"    list (%s)\n", lname);
         }
     }
 
