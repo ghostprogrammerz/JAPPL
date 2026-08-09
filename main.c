@@ -29,7 +29,7 @@ static void usage(void) {
     fprintf(stderr,
         "usage:\n"
         "  jappl2sb3 <file.jappl> [output.sb3]     compile\n"
-        "  jappl2sb3 --decompile <file.sb3> [out.jappl]   decompile\n"
+        "  jappl2sb3 --decompile <file.sb3> [out.zip]     decompile to zip\n"
     );
 }
 
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "--decompile") == 0) {
         if (argc < 3) { usage(); return 1; }
         const char *in  = argv[2];
-        char *out = argc >= 4 ? strdup(argv[3]) : replace_ext(in, ".jappl");
+        char *out = argc >= 4 ? strdup(argv[3]) : replace_ext(in, ".zip");
         int r = decompile_sb3(in, out);
         if (r == 0) printf("wrote %s\n", out);
         free(out);

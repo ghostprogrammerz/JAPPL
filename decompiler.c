@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <zlib.h>
 #include "decompiler.h"
 
 /* ── minimal JSON parser ─────────────────────────────────────────── */
@@ -158,7 +159,6 @@ static JVal *jarr_get(JVal *v, int i) {
 }
 
 /* ── zip reader with deflate (zlib) ─────────────────────────────── */
-#include <zlib.h>
 static char *zip_read_file(const char *path, const char *name, int *out_len) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
@@ -1108,8 +1108,219 @@ static void decompile_target(Buf *out, JVal *target, int is_stage,
     buf_cat(out,"}\n\n");
 }
 
+/* ── zip writer (stored, no compression) ────────────────────────── */
+
+typedef struct { unsigned char *data; int len; int cap; } ByteBuf2;
+static void bb2_init(ByteBuf2 *b) { b->data=malloc(65536); b->cap=65536; b->len=0; }
+static void bb2_ensure(ByteBuf2 *b, int n) {
+    while (b->len+n>=b->cap){ b->cap*=2; b->data=realloc(b->data,b->cap); }
+}
+static void bb2_write(ByteBuf2 *b, const void *d, int n) {
+    bb2_ensure(b,n); memcpy(b->data+b->len,d,n); b->len+=n;
+}
+static void bb2_u16le(ByteBuf2 *b, unsigned short v) {
+    unsigned char t[2]={v&0xFF,(v>>8)&0xFF}; bb2_write(b,t,2);
+}
+static void bb2_u32le(ByteBuf2 *b, unsigned int v) {
+    unsigned char t[4]={v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF}; bb2_write(b,t,4);
+}
+
+static unsigned int crc32_dc(const unsigned char *data, int len) {
+    static unsigned int table[256];
+    static int built=0;
+    if (!built) {
+        for (int i=0;i<256;i++){
+            unsigned int c=i;
+            for (int j=0;j<8;j++) c=(c&1)?(0xEDB88320^(c>>1)):(c>>1);
+            table[i]=c;
+        }
+        built=1;
+    }
+    unsigned int crc=0xFFFFFFFF;
+    for (int i=0;i<len;i++) crc=table[(crc^data[i])&0xFF]^(crc>>8);
+    return crc^0xFFFFFFFF;
+}
+
+typedef struct { int offset; unsigned int crc; int dlen; char *name; } CDEntry2;
+
+static void zip2_add(ByteBuf2 *z, CDEntry2 **entries, int *ne, int *ecap,
+                     const char *name, const unsigned char *data, int dlen) {
+    if (*ne >= *ecap) {
+        *ecap = *ecap ? *ecap*2 : 8;
+        *entries = realloc(*entries, sizeof(CDEntry2)*(*ecap));
+    }
+    CDEntry2 *e = &(*entries)[*ne];
+    e->crc    = crc32_dc(data, dlen);
+    e->dlen   = dlen;
+    e->name   = strdup(name);
+    e->offset = z->len;
+
+    int nlen = strlen(name);
+    bb2_write(z, "\x50\x4b\x03\x04", 4);
+    bb2_u16le(z, 20);
+    bb2_u16le(z, 0);
+    bb2_u16le(z, 0);   /* stored */
+    bb2_u16le(z, 0);
+    bb2_u16le(z, 0);
+    bb2_u32le(z, e->crc);
+    bb2_u32le(z, dlen);
+    bb2_u32le(z, dlen);
+    bb2_u16le(z, nlen);
+    bb2_u16le(z, 0);
+    bb2_write(z, name, nlen);
+    bb2_write(z, data, dlen);
+    (*ne)++;
+}
+
+static void zip2_finish(ByteBuf2 *z, CDEntry2 *entries, int ne) {
+    int cd_start = z->len;
+    for (int i=0;i<ne;i++) {
+        int nlen = strlen(entries[i].name);
+        bb2_write(z, "\x50\x4b\x01\x02", 4);
+        bb2_u16le(z, 20);
+        bb2_u16le(z, 20);
+        bb2_u16le(z, 0);
+        bb2_u16le(z, 0);
+        bb2_u16le(z, 0);
+        bb2_u16le(z, 0);
+        bb2_u32le(z, entries[i].crc);
+        bb2_u32le(z, entries[i].dlen);
+        bb2_u32le(z, entries[i].dlen);
+        bb2_u16le(z, nlen);
+        bb2_u16le(z, 0);
+        bb2_u16le(z, 0);
+        bb2_u16le(z, 0);
+        bb2_u16le(z, 0);
+        bb2_u32le(z, 0);
+        bb2_u32le(z, entries[i].offset);
+        bb2_write(z, entries[i].name, nlen);
+    }
+    int cd_size = z->len - cd_start;
+    bb2_write(z, "\x50\x4b\x05\x06", 4);
+    bb2_u16le(z, 0); bb2_u16le(z, 0);
+    bb2_u16le(z, ne); bb2_u16le(z, ne);
+    bb2_u32le(z, cd_size);
+    bb2_u32le(z, cd_start);
+    bb2_u16le(z, 0);
+}
+
+/* ── variable / list state collector ───────────────────────────── */
+
+typedef struct { char *name; char *value; } VarState;
+typedef struct { char *name; char **items; int count; } ListState;
+
+typedef struct {
+    VarState  *vars;  int var_count;  int var_cap;
+    ListState *lists; int list_count; int list_cap;
+} StateCollector;
+
+static void sc_init(StateCollector *sc) { memset(sc,0,sizeof(*sc)); }
+
+static void sc_add_var(StateCollector *sc, const char *name, const char *value) {
+    /* skip if already seen (global vars appear on both stage and sprites) */
+    for (int i=0;i<sc->var_count;i++)
+        if (strcmp(sc->vars[i].name,name)==0) return;
+    if (sc->var_count>=sc->var_cap) {
+        sc->var_cap = sc->var_cap ? sc->var_cap*2 : 8;
+        sc->vars = realloc(sc->vars, sizeof(VarState)*sc->var_cap);
+    }
+    sc->vars[sc->var_count].name  = strdup(name);
+    sc->vars[sc->var_count].value = strdup(value ? value : "");
+    sc->var_count++;
+}
+
+static void sc_add_list(StateCollector *sc, const char *name, JVal *items_arr) {
+    for (int i=0;i<sc->list_count;i++)
+        if (strcmp(sc->lists[i].name,name)==0) return;
+    if (sc->list_count>=sc->list_cap) {
+        sc->list_cap = sc->list_cap ? sc->list_cap*2 : 8;
+        sc->lists = realloc(sc->lists, sizeof(ListState)*sc->list_cap);
+    }
+    ListState *ls = &sc->lists[sc->list_count++];
+    ls->name  = strdup(name);
+    ls->count = 0;
+    ls->items = NULL;
+    if (items_arr && items_arr->type==JArr) {
+        ls->count = items_arr->arr.count;
+        ls->items = malloc(sizeof(char*)*ls->count);
+        for (int i=0;i<ls->count;i++) {
+            JVal *item = items_arr->arr.items[i];
+            if (item && item->type==JStr)       ls->items[i]=strdup(item->string);
+            else if (item && item->type==JNum) {
+                char buf[64]; snprintf(buf,sizeof(buf),"%.17g",item->number);
+                ls->items[i]=strdup(buf);
+            } else ls->items[i]=strdup("");
+        }
+    }
+}
+
+static void sc_collect_target(StateCollector *sc, JVal *target) {
+    JVal *variables = jobj_get(target,"variables");
+    JVal *lists     = jobj_get(target,"lists");
+    if (variables && variables->type==JObj) {
+        for (int i=0;i<variables->obj.count;i++) {
+            JVal *varr = variables->obj.pairs[i].val;
+            const char *vname="", *vval="";
+            if (varr && varr->type==JArr) {
+                if (varr->arr.count>0 && varr->arr.items[0]->type==JStr)
+                    vname = varr->arr.items[0]->string;
+                if (varr->arr.count>1) {
+                    JVal *v = varr->arr.items[1];
+                    if (v->type==JStr) vval=v->string;
+                    else if (v->type==JNum) {
+                        static char nbuf[64];
+                        snprintf(nbuf,sizeof(nbuf),"%.17g",v->number);
+                        vval=nbuf;
+                    } else if (v->type==JBool) vval=v->boolean?"true":"false";
+                }
+            } else {
+                vname = variables->obj.pairs[i].key;
+            }
+            sc_add_var(sc, vname, vval);
+        }
+    }
+    if (lists && lists->type==JObj) {
+        for (int i=0;i<lists->obj.count;i++) {
+            JVal *larr = lists->obj.pairs[i].val;
+            const char *lname="";
+            JVal *items_arr = NULL;
+            if (larr && larr->type==JArr) {
+                if (larr->arr.count>0 && larr->arr.items[0]->type==JStr)
+                    lname = larr->arr.items[0]->string;
+                if (larr->arr.count>1 && larr->arr.items[1]->type==JArr)
+                    items_arr = larr->arr.items[1];
+            } else {
+                lname = lists->obj.pairs[i].key;
+            }
+            sc_add_list(sc, lname, items_arr);
+        }
+    }
+}
+
+static void sc_free(StateCollector *sc) {
+    for (int i=0;i<sc->var_count;i++) { free(sc->vars[i].name); free(sc->vars[i].value); }
+    free(sc->vars);
+    for (int i=0;i<sc->list_count;i++) {
+        free(sc->lists[i].name);
+        for (int j=0;j<sc->lists[i].count;j++) free(sc->lists[i].items[j]);
+        free(sc->lists[i].items);
+    }
+    free(sc->lists);
+}
+
+/* sanitize a list name to a safe filename (replace / \ : * ? " < > | with _) */
+static void safe_filename(const char *name, char *out, int max) {
+    int i=0;
+    for (const char *p=name; *p && i<max-1; p++,i++) {
+        char c=*p;
+        if (c=='/'||c=='\\'||c==':'||c=='*'||c=='?'||c=='"'||c=='<'||c=='>'||c=='|') c='_';
+        out[i]=c;
+    }
+    out[i]='\0';
+}
+
 /* ── main entry ─────────────────────────────────────────────────── */
-int decompile_sb3(const char *sb3_path, const char *jappl_path) {
+int decompile_sb3(const char *sb3_path, const char *out_zip_path) {
     int json_len=0;
     char *json = zip_read_file(sb3_path, "project.json", &json_len);
     if (!json) { fprintf(stderr,"cannot read project.json from %s\n",sb3_path); return -1; }
@@ -1121,8 +1332,9 @@ int decompile_sb3(const char *sb3_path, const char *jappl_path) {
     JVal *targets = jobj_get(root,"targets");
     if (!targets||targets->type!=JArr) { fprintf(stderr,"no targets\n"); return -1; }
 
-    Buf out; buf_init(&out);
-    buf_cat(&out,"// decompiled by jappl2sb3\n\n");
+    /* ── 1. decompile code ────────────────────────────────────────── */
+    Buf code; buf_init(&code);
+    buf_cat(&code,"// decompiled by jappl2sb3\n\n");
 
     JVal *stage_target = NULL;
     for (int i=0;i<targets->arr.count;i++) {
@@ -1132,19 +1344,93 @@ int decompile_sb3(const char *sb3_path, const char *jappl_path) {
     }
 
     if (stage_target)
-        decompile_target(&out, stage_target, 1, NULL);
+        decompile_target(&code, stage_target, 1, NULL);
 
     for (int i=0;i<targets->arr.count;i++) {
         JVal *t = targets->arr.items[i];
         JVal *is = jobj_get(t,"isStage");
         if (is&&is->type==JBool&&is->boolean) continue;
-        decompile_target(&out, t, 0, stage_target);
+        decompile_target(&code, t, 0, stage_target);
     }
 
-    FILE *f = fopen(jappl_path,"w");
-    if (!f) { fprintf(stderr,"cannot write %s\n",jappl_path); free(out.buf); return -1; }
-    fwrite(out.buf,1,out.len,f);
+    /* ── 2. collect variable / list state ────────────────────────── */
+    StateCollector sc; sc_init(&sc);
+    for (int i=0;i<targets->arr.count;i++)
+        sc_collect_target(&sc, targets->arr.items[i]);
+
+    /* ── 3. build variables.csv ──────────────────────────────────── */
+    Buf vcsv; buf_init(&vcsv);
+    buf_cat(&vcsv,"name,value\n");
+    for (int i=0;i<sc.var_count;i++) {
+        /* CSV-escape: wrap in quotes if value contains comma, quote, or newline */
+        const char *v = sc.vars[i].value;
+        int needs_quote = (strchr(v,',')||strchr(v,'"')||strchr(v,'\n'));
+        buf_cat(&vcsv, sc.vars[i].name);
+        buf_cat(&vcsv, ",");
+        if (needs_quote) {
+            buf_cat(&vcsv, "\"");
+            for (const char *p=v;*p;p++) {
+                if (*p=='"') buf_cat(&vcsv,"\"\"");
+                else { char tmp[2]={*p,0}; buf_cat(&vcsv,tmp); }
+            }
+            buf_cat(&vcsv, "\"");
+        } else {
+            buf_cat(&vcsv, v);
+        }
+        buf_cat(&vcsv,"\n");
+    }
+
+    /* ── 4. pack into output zip ─────────────────────────────────── */
+    ByteBuf2 z; bb2_init(&z);
+    CDEntry2 *entries = NULL;
+    int ne=0, ecap=0;
+
+    zip2_add(&z,&entries,&ne,&ecap,
+             "project.jappl",
+             (const unsigned char*)code.buf, code.len);
+
+    zip2_add(&z,&entries,&ne,&ecap,
+             "variables.csv",
+             (const unsigned char*)vcsv.buf, vcsv.len);
+
+    for (int i=0;i<sc.list_count;i++) {
+        ListState *ls = &sc.lists[i];
+        Buf ltxt; buf_init(&ltxt);
+        for (int j=0;j<ls->count;j++) {
+            buf_cat(&ltxt, ls->items[j]);
+            buf_cat(&ltxt, "\n");
+        }
+        char fname[512];
+        char safe[480];
+        safe_filename(ls->name, safe, sizeof(safe));
+        snprintf(fname, sizeof(fname), "%s.txt", safe);
+        zip2_add(&z,&entries,&ne,&ecap,
+                 fname,
+                 (const unsigned char*)ltxt.buf, ltxt.len);
+        free(ltxt.buf);
+    }
+
+    zip2_finish(&z, entries, ne);
+
+    FILE *f = fopen(out_zip_path,"wb");
+    if (!f) { fprintf(stderr,"cannot write %s\n",out_zip_path); goto fail; }
+    fwrite(z.data,1,z.len,f);
     fclose(f);
-    free(out.buf);
+
+    for (int i=0;i<ne;i++) free(entries[i].name);
+    free(entries);
+    free(z.data);
+    free(code.buf);
+    free(vcsv.buf);
+    sc_free(&sc);
     return 0;
+
+fail:
+    for (int i=0;i<ne;i++) free(entries[i].name);
+    free(entries);
+    free(z.data);
+    free(code.buf);
+    free(vcsv.buf);
+    sc_free(&sc);
+    return -1;
 }
