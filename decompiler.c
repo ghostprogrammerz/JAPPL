@@ -962,12 +962,8 @@ static void decompile_hat(Buf *out, JVal *blocks, const char *uid, int depth) {
             strcmp(op,"argument_reporter_boolean")==0
         ));
         if (is_reporter) {
-            /* Floating reporter — emit a harmless placeholder so the emitter
-               produces a visible top-level block on the Scratch canvas. */
-            buf_indent(out, depth); buf_cat(out,"{\n");
-            buf_indent(out, depth+1); buf_printf(out,"// was: %s\n", op);
-            buf_indent(out, depth+1); buf_cat(out,"set variable (my variable) to (0)\n");
-            buf_indent(out, depth); buf_cat(out,"}\n\n");
+            /* Floating reporter — orphaned expression node, skip entirely */
+            return;
         } else {
             buf_printf(out,"// floating: %s\n", op);
             buf_indent(out, depth); buf_cat(out,"{\n");
