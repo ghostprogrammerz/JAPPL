@@ -930,9 +930,52 @@ static void decompile_hat(Buf *out, JVal *blocks, const char *uid, int depth) {
         JVal *proto = jobj_get(blocks,proto_uid);
         JVal *pmut  = proto ? jobj_get(proto,"mutation") : NULL;
         const char *proccode = pmut ? jstr(jobj_get(pmut,"proccode")) : "";
-        char pname[256]; strncpy(pname,proccode,sizeof(pname)-1); pname[255]=0;
-        char *pct=strstr(pname," %s"); if(pct)*pct='\0';
-        buf_printf(out,"define (%s)\n", pname);
+        /* argumentnames is a JSON-encoded string like "[\"x\",\"y\"]" */
+        const char *argnames_json = pmut ? jstr(jobj_get(pmut,"argumentnames")) : "[]";
+
+        /* parse argnames_json manually — it's always a flat array of strings */
+        char argnames[16][64]; int argc = 0;
+        {
+            const char *p2 = argnames_json;
+            while (*p2 && *p2 != '[') p2++;
+            if (*p2 == '[') p2++;
+            while (*p2 && *p2 != ']' && argc < 16) {
+                while (*p2 && *p2 != '"' && *p2 != ']') p2++;
+                if (*p2 != '"') break;
+                p2++; /* skip opening " */
+                int i = 0;
+                while (*p2 && *p2 != '"' && i < 63)
+                    argnames[argc][i++] = *p2++;
+                argnames[argc][i] = 0;
+                argc++;
+                if (*p2 == '"') p2++;
+            }
+        }
+
+        /* build define line: replace each %s/%b in proccode with (argname) */
+        Buf def; buf_init(&def);
+        buf_cat(&def, "define (");
+        const char *pc = proccode; int ai = 0;
+        while (*pc) {
+            if (pc[0]=='%' && (pc[1]=='s'||pc[1]=='b')) {
+                if (ai < argc) {
+                    /* trim trailing space before closing paren */
+                    while (def.len > 0 && def.buf[def.len-1]==' ') def.len--;
+                    def.buf[def.len]=0;
+                    buf_cat(&def, ") (");
+                    buf_cat(&def, argnames[ai++]);
+                }
+                pc += 2;
+            } else {
+                char tmp[2] = {*pc, 0};
+                buf_cat(&def, tmp);
+                pc++;
+            }
+        }
+        buf_cat(&def, ")\n");
+        buf_indent(out, depth);
+        buf_cat(out, def.buf);
+        free(def.buf);
     } else {
         /* Is this a floating reporter block (no next, no hat)?
            If so, wrap it in a set statement so it round-trips as a visible canvas block.
