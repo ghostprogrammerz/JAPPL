@@ -731,21 +731,16 @@ static Expr *parse_paren_expr(Parser *p) {
     expect(p, TOK_LPAREN);
     int line = cur(p).line;
 
-    if (is_structured_expr_start(p)) {
-        Expr *e = parse_expr(p);
-        expect(p, TOK_RPAREN);
-        return e;
-    }
-
+    /* Param check MUST come before is_structured_expr_start so that a param
+       named with a keyword token (e.g. "list ID") is caught as EXPR_ARG_REPORTER
+       instead of being parsed as a list/keyword expression. */
     if (p->cur_param_count > 0) {
         int saved_pos        = p->lexer.pos;
         int saved_lex_line   = p->lexer.line;
         Token saved_cur      = p->current;
-        /* strdup the value so it survives advance() calls in the loop below */
         if (saved_cur.value) saved_cur.value = strdup(saved_cur.value);
         int saved_has_peeked = p->has_peeked;
         Token saved_peeked   = p->peeked;
-        /* only strdup peeked value if has_peeked is set — otherwise the value is stale */
         if (saved_has_peeked && saved_peeked.value) saved_peeked.value = strdup(saved_peeked.value);
 
         char buf[256] = {0};
@@ -768,9 +763,9 @@ static Expr *parse_paren_expr(Parser *p) {
                 }
             }
         }
+        /* no param match — rewind */
         p->lexer.pos  = saved_pos;
         p->lexer.line = saved_lex_line;
-        /* free the current token before overwriting with saved copy */
         token_free(&p->current);
         p->current    = saved_cur;
         p->has_peeked = saved_has_peeked;
@@ -778,7 +773,16 @@ static Expr *parse_paren_expr(Parser *p) {
             token_free(&p->peeked);
             p->peeked = saved_peeked;
         }
-        /* if saved_has_peeked was 0, saved_peeked.value was NOT strdup'd — don't free it */
+    }
+
+    if (is_structured_expr_start(p)) {
+        Expr *e = parse_expr(p);
+        expect(p, TOK_RPAREN);
+        return e;
+    }
+
+    if (p->cur_param_count > 0) {
+        /* already handled above, before structured-expr check */
     }
 
     char buf2[256] = {0};
