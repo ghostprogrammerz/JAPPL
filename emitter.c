@@ -74,6 +74,7 @@ static void new_uid(char *out) {
 }
 
 /* ── JSON string escaping ───────────────────────────────────────── */
+/* emit a value as a JSON number if it looks numeric, else as a JSON string */
 static void buf_json_str(Buf *b, const char *s) {
     buf_cat(b, "\"");
     if (!s) { buf_cat(b, "\""); return; }
@@ -88,6 +89,17 @@ static void buf_json_str(Buf *b, const char *s) {
         }
     }
     buf_cat(b, "\"");
+}
+
+static void buf_json_val(Buf *b, const char *s) {
+    if (!s || !*s) { buf_cat(b, "\"\""); return; }
+    char *end;
+    strtod(s, &end);
+    if (end != s && *end == '\0') {
+        buf_cat(b, s);
+    } else {
+        buf_json_str(b, s);
+    }
 }
 
 /* ── Block table ────────────────────────────────────────────────── */
@@ -1270,7 +1282,7 @@ static void emit_sprite_json(Buf *out, Sprite *sp, Program *prog,
         const char *_val = state_get_var(st, (v)->name); \
         buf_json_str(out, (v)->name); buf_cat(out, ":["); \
         buf_json_str(out, (v)->name); buf_cat(out, ","); \
-        buf_json_str(out, _val ? _val : "0"); \
+        buf_json_val(out, _val ? _val : "0"); \
         buf_cat(out, "]"); \
         first = 0; \
     } while(0)
@@ -1299,7 +1311,7 @@ static void emit_sprite_json(Buf *out, Sprite *sp, Program *prog,
         if (_sl) { \
             for (int _i = 0; _i < _sl->count; _i++) { \
                 if (_i) buf_cat(out, ","); \
-                buf_json_str(out, _sl->items[_i]); \
+                buf_json_val(out, _sl->items[_i]); \
             } \
         } \
         buf_cat(out, "]]"); \
