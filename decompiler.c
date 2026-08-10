@@ -961,16 +961,8 @@ static void decompile_hat(Buf *out, JVal *blocks, const char *uid, int depth) {
             strcmp(op,"argument_reporter_string_number")==0 ||
             strcmp(op,"argument_reporter_boolean")==0
         ));
-        if (is_reporter) {
-            /* Floating reporter — orphaned expression node, skip entirely */
-            return;
-        } else {
-            buf_printf(out,"// floating: %s\n", op);
-            buf_indent(out, depth); buf_cat(out,"{\n");
-            /* include the block itself, not just its next */
-            decompile_chain(out, blocks, uid, depth+1);
-            buf_indent(out, depth); buf_cat(out,"}\n\n");
-        }
+        /* Floating block with no hat — skip entirely */
+        (void)is_reporter;
         return;
     }
 
