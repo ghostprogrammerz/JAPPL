@@ -793,7 +793,9 @@ static Expr *parse_paren_expr(Parser *p) {
     }
     expect(p, TOK_RPAREN);
     Expr *e;
-    if (token_count == 1 && first_is_ident) {
+    /* treat any all-ident multi-word content as a variable name,
+       not a string literal — e.g. (list ID), (dot result), (pick?) */
+    if (first_is_ident) {
         e = expr_new(EXPR_VAR, line);
     } else {
         e = expr_new(EXPR_STRING, line);
@@ -1658,6 +1660,13 @@ static Script *parse_script(Parser *p) {
         sc->proc_params       = params;
         sc->proc_param_count  = nparams;
         sc->no_refresh        = no_refresh;
+
+        /* skip parameter slot tokens: define (name) (param1) (param2) ... { */
+        while (check(p, TOK_LPAREN)) {
+            advance(p);
+            while (!check(p, TOK_RPAREN) && !check(p, TOK_EOF)) advance(p);
+            if (check(p, TOK_RPAREN)) advance(p);
+        }
 
         char **saved_params    = p->cur_params;
         int    saved_nparams   = p->cur_param_count;
