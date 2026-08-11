@@ -88,10 +88,7 @@ typedef struct {
 
 static int read_request(int fd, Request *r) {
     memset(r, 0, sizeof(*r));
-
-    size_t cap = 8192;
-    size_t hlen = 0;
-    size_t header_end = 0;
+    size_t cap = 8192, hlen = 0, header_end = 0;
     char *headers = malloc(cap);
     if (!headers) return -1;
 
@@ -103,11 +100,9 @@ static int read_request(int fd, Request *r) {
             if (!tmp) { free(headers); return -1; }
             headers = tmp;
         }
-
         ssize_t n = read(fd, headers + hlen, cap - hlen);
         if (n <= 0) { free(headers); return -1; }
         hlen += (size_t)n;
-
         size_t start = hlen >= (size_t)n + 3 ? hlen - (size_t)n - 3 : 0;
         for (size_t i = start; i + 3 < hlen; i++) {
             if (headers[i] == '\r' && headers[i + 1] == '\n' &&
@@ -127,7 +122,6 @@ headers_done:
         if (method_len >= sizeof(r->method)) { free(headers); return -1; }
         memcpy(r->method, p, method_len);
         r->method[method_len] = '\0';
-
         p = sp1 + 1;
         char *sp2 = memchr(p, ' ', header_end - (size_t)(p - headers));
         if (!sp2) { free(headers); return -1; }
@@ -148,11 +142,7 @@ headers_done:
         if ((size_t)(line - headers) >= header_end) break;
         line = memchr(line, '\n', header_end - (size_t)(line - headers));
     }
-
-    if (r->content_length > MAX_REQUEST) {
-        free(headers);
-        return -1;
-    }
+    if (r->content_length > MAX_REQUEST) { free(headers); return -1; }
 
     size_t already = hlen - header_end;
     size_t total = r->content_length;
@@ -165,11 +155,7 @@ headers_done:
     size_t got = already;
     while (got < total) {
         ssize_t n = read(fd, r->body + got, total - got);
-        if (n <= 0) {
-            free(r->body);
-            r->body = NULL;
-            return -1;
-        }
+        if (n <= 0) { free(r->body); r->body = NULL; return -1; }
         got += (size_t)n;
     }
     r->body[total] = '\0';
@@ -187,13 +173,13 @@ static const char *mime_for(const char *path) {
 }
 
 /*
- * The IDE contains the stage iframe and the normal compile functions.
- * Override only the runtime controls so the generated Packager HTML is
- * loaded from this server. No request is made to turbowarp.org.
+ * The existing IDE calls its stage iframe #tw-iframe. Keep the runtime
+ * controller here only as a compatibility layer; it never contacts
+ * turbowarp.org and loads the locally generated /preview HTML instead.
  */
 static const char *preview_controller =
     "<script>(function(){"
-    "function frame(){return document.getElementById('stage-iframe');}"
+    "function frame(){return document.getElementById('tw-iframe');}"
     "function backend(){var e=document.getElementById('backend-url');return e?e.value.trim():location.origin;}"
     "window.loadProject=function(){"
         "var f=frame();if(!f)return;"
@@ -238,10 +224,7 @@ static void handle_static(int fd, const char *url) {
         size_t off = len;
         while (off >= marker_len) {
             size_t pos = off - marker_len;
-            if (!memcmp(html + pos, marker, marker_len)) {
-                off = pos;
-                break;
-            }
+            if (!memcmp(html + pos, marker, marker_len)) { off = pos; break; }
             if (pos == 0) { off = len; break; }
             off = pos;
         }
@@ -315,7 +298,6 @@ static int package_sb3(const char *sb3, char **out, size_t *out_len) {
 
 static void handle_compile(int fd, const char *src, size_t src_len) {
     (void)src_len;
-
     char tmp[128];
     snprintf(tmp, sizeof(tmp), TMPDIR "/jappl_%d.sb3", (int)getpid());
 
@@ -329,8 +311,7 @@ static void handle_compile(int fd, const char *src, size_t src_len) {
     }
 
     if (emit_sb3(program, tmp) != 0) {
-        http_respond(fd, 500, "text/plain",
-                     "Emitter failed to write .sb3\n", 31);
+        http_respond(fd, 500, "text/plain", "Emitter failed to write .sb3\n", 31);
         return;
     }
 
@@ -338,8 +319,7 @@ static void handle_compile(int fd, const char *src, size_t src_len) {
     char *sb3 = read_file_binary(tmp, &len);
     if (!sb3) {
         unlink(tmp);
-        http_respond(fd, 500, "text/plain",
-                     "Failed to read compiled .sb3\n", 31);
+        http_respond(fd, 500, "text/plain", "Failed to read compiled .sb3\n", 31);
         return;
     }
 
@@ -359,16 +339,12 @@ static void handle_compile(int fd, const char *src, size_t src_len) {
     free(g_sb3_buf);
     g_sb3_buf = sb3;
     g_sb3_len = len;
-
     http_respond(fd, 200, "application/zip", g_sb3_buf, g_sb3_len);
 }
 
 static void handle_connection(int fd) {
     Request r;
-    if (read_request(fd, &r) != 0) {
-        close(fd);
-        return;
-    }
+    if (read_request(fd, &r) != 0) { close(fd); return; }
 
     if (!strcmp(r.method, "OPTIONS")) {
         http_respond(fd, 200, "text/plain", "", 0);
@@ -383,8 +359,7 @@ static void handle_connection(int fd) {
 
     if (!strncmp(r.path, "/preview", 8)) {
         if (g_preview_buf) {
-            http_respond(fd, 200, "text/html; charset=utf-8",
-                         g_preview_buf, g_preview_len);
+            http_respond(fd, 200, "text/html; charset=utf-8", g_preview_buf, g_preview_len);
         } else {
             const char *msg = "No packaged project yet. Compile first and run npm install in ide/.\n";
             http_respond(fd, 404, "text/plain", msg, strlen(msg));
@@ -393,9 +368,8 @@ static void handle_connection(int fd) {
     }
 
     if (!strcmp(r.path, "/download")) {
-        if (g_sb3_buf) {
-            http_respond(fd, 200, "application/zip", g_sb3_buf, g_sb3_len);
-        } else {
+        if (g_sb3_buf) http_respond(fd, 200, "application/zip", g_sb3_buf, g_sb3_len);
+        else {
             const char *msg = "No project compiled yet\n";
             http_respond(fd, 404, "text/plain", msg, strlen(msg));
         }
@@ -424,7 +398,6 @@ done:
 
 int main(int argc, char **argv) {
     int port = argc >= 2 ? atoi(argv[1]) : DEFAULT_PORT;
-
     char exe[4096] = {0};
     ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
     if (n > 0) {
@@ -442,28 +415,20 @@ int main(int argc, char **argv) {
 
     int server = socket(AF_INET, SOCK_STREAM, 0);
     if (server < 0) { perror("socket"); return 1; }
-
     int opt = 1;
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
     struct sockaddr_in address = {
         .sin_family = AF_INET,
         .sin_port = htons((uint16_t)port),
         .sin_addr.s_addr = INADDR_ANY
     };
-
     if (bind(server, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind");
-        return 1;
+        perror("bind"); return 1;
     }
-    if (listen(server, 16) < 0) {
-        perror("listen");
-        return 1;
-    }
+    if (listen(server, 16) < 0) { perror("listen"); return 1; }
 
     printf("jappl2sb3 server listening on http://0.0.0.0:%d\n", port);
     fflush(stdout);
-
     for (;;) {
         struct sockaddr_in client;
         socklen_t client_len = sizeof(client);
