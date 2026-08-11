@@ -1080,9 +1080,9 @@ async function loadProject(blob) {
 }
 
 async function initScratch(canvas) {
-  const VM = window.VirtualMachine;
+  const VM      = window.VirtualMachine;
   const Renderer = window.ScratchRender;
-  const Storage = window.ScratchStorage;
+  const Storage  = window.ScratchStorage && window.ScratchStorage.ScratchStorage;
 
   if (!VM || !Renderer || !Storage) {
     throw new Error('Scratch libs not loaded — is the server running on localhost:8765?');
@@ -1095,7 +1095,7 @@ async function initScratch(canvas) {
   vm.attachRenderer(renderer);
 
   const storage = new Storage();
-  const AssetType = storage.AssetType;
+  const AssetType = window.ScratchStorage.AssetType;
   storage.addWebStore(
     [AssetType.ImageVector, AssetType.ImageBitmap, AssetType.Sound],
     asset => `https://assets.scratch.mit.edu/internalapi/asset/${asset.assetId}.${asset.dataFormat}/get/`
