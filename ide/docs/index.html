@@ -2,47 +2,224 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JAPPL Docs</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAPPL Documentation</title>
 <style>
-:root{--bg:#f7f7f7;--panel:#fff;--text:#333;--muted:#777;--blue:#4c97ff;--purple:#9966ff;--border:#ddd;}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 system-ui,-apple-system,sans-serif}main{padding:18px 16px 40px}h1{font-size:25px;margin:0 0 4px;color:#575e75}h2{font-size:18px;margin:24px 0 8px;color:#4c97ff;border-bottom:2px solid #eee;padding-bottom:4px}h3{font-size:15px;margin:16px 0 5px}p{margin:7px 0}code{background:#eee;border-radius:4px;padding:1px 4px;font-family:monospace}pre{background:#252526;color:#eee;border-radius:6px;padding:10px;overflow:auto;font:12px/1.5 monospace}.note{background:#eaf3ff;border-left:4px solid #4c97ff;padding:8px 10px;margin:10px 0}.block{display:inline-block;border-radius:14px;padding:3px 9px;color:white;background:#4c97ff;font-family:monospace;font-size:12px}.looks{background:#9966ff}.control{background:#ffab19}.sensing{background:#5cb1d6}.variables{background:#ff8c1a}ul{padding-left:20px}a{color:#4c97ff}
+:root{--bg:#f7f7f7;--panel:#fff;--text:#222;--muted:#666;--border:#ddd;--blue:#4c97ff;--green:#59c059;--purple:#9966ff;--pink:#ff6680;--orange:#ffab19;--yellow:#d9a600;--cyan:#5cb1d6;--red:#ff4c4c;--supported:#e9f8ea;--partial:#fff5dc;--no:#f5f5f5}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--border);padding:14px 18px;box-shadow:0 1px 4px #0001}header strong{font-size:20px;color:#575e75}nav{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap}nav a{padding:4px 8px;border-radius:6px;background:#f0f0f0;color:#333;text-decoration:none;font-size:12px}main{max-width:1180px;margin:auto;padding:20px 18px 60px}h1{font-size:30px;margin:0 0 6px;color:#575e75}h2{font-size:22px;margin:34px 0 10px;border-bottom:3px solid #eee;padding-bottom:6px}h3{font-size:17px;margin:22px 0 8px}p{margin:7px 0}.note{background:#eaf3ff;border-left:4px solid var(--blue);padding:11px 13px;margin:12px 0;border-radius:0 6px 6px 0}.warn{background:#fff4dd;border-left:4px solid var(--orange);padding:11px 13px;margin:12px 0}.ok{background:var(--supported);border-left:4px solid var(--green);padding:11px 13px;margin:12px 0}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#eee;border-radius:4px;padding:1px 5px}pre{background:#252526;color:#eee;border-radius:7px;padding:12px;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}table{width:100%;border-collapse:collapse;background:var(--panel);margin:10px 0 24px;font-size:12px}th,td{border:1px solid var(--border);padding:7px 8px;text-align:left;vertical-align:top}th{background:#f0f0f0;position:sticky;top:80px;z-index:2}tr.supported{background:var(--supported)}tr.partial{background:var(--partial)}tr.no{background:var(--no);color:#666}.cat{display:inline-block;color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}.motion{background:var(--blue)}.looks{background:var(--purple)}.sound{background:var(--pink)}.events{background:var(--yellow);color:#222}.control{background:var(--orange)}.sensing{background:var(--cyan)}.operators{background:var(--green)}.variables{background:#ff8c1a}.myblocks{background:#ff6680}.status{white-space:nowrap;font-weight:700}.yes{color:#16812b}.maybe{color:#a66a00}.nope{color:#777}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px}.small{font-size:12px;color:var(--muted)}.top{float:right;font-size:12px}.block{display:inline-block;padding:3px 8px;border-radius:12px;background:var(--blue);color:#fff;font-family:monospace}.pill{display:inline-block;padding:2px 7px;border-radius:10px;background:#eee;font-size:11px}.jappl{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap}.anchor{scroll-margin-top:95px}
 </style>
 </head>
-<body><main>
-<h1>JAPPL Documentation</h1><p>A quick reference for writing Scratch-style programs in JAPPL.</p>
-<div class="note">JAPPL compiles to <code>.sb3</code> projects. Use <b>Compile &amp; Run</b> in the IDE to test your project.</div>
-<h2>Basics</h2><p>Statements use Scratch-like syntax. Text literals must be surrounded by double quotes.</p><pre>when (green flag)
+<body>
+<header><strong>JAPPL Docs</strong><nav>
+<a href="#start">Start</a><a href="#motion">Motion</a><a href="#looks">Looks</a><a href="#sound">Sound</a><a href="#events">Events</a><a href="#control">Control</a><a href="#sensing">Sensing</a><a href="#operators">Operators</a><a href="#variables">Variables &amp; Lists</a><a href="#myblocks">My Blocks</a><a href="#extensions">Extensions</a><a href="#syntax">Syntax</a>
+</nav></header>
+<main>
+<section id="start" class="anchor"><h1>JAPPL Documentation</h1>
+<p>JAPPL is a text language that compiles to Scratch <code>.sb3</code> projects. This page is the block-by-block conversion reference: each Scratch block is listed with its Scratch meaning, JAPPL form when implemented, and the Scratch 3 opcode emitted by the compiler.</p>
+<div class="note"><b>Status:</b> <span class="pill">Supported</span> means the current JAPPL compiler emits that Scratch block. <span class="pill">Partial</span> means related functionality exists but the exact Scratch block is not fully represented. <span class="pill">Not implemented</span> means it is documented here as a Scratch block but the current compiler does not emit it.</div>
+<div class="warn"><b>Important:</b> this table describes the current compiler, not a promise that every Scratch block already works. Unsupported blocks are intentionally marked instead of pretending they compile.</div>
+<h2>How conversion works</h2>
+<p>JAPPL parses your source into an AST and the emitter converts that AST into Scratch block JSON. Literal strings use quotes; an unquoted identifier is a variable expression.</p>
+<pre>when (green flag)
 {
     say ("Hello world") for (2) seconds
     move (10) steps
-}</pre><p>An unquoted name is interpreted as an expression, such as a variable. Therefore <code>say (hello)</code> reads the value of the variable <code>hello</code>, while <code>say ("hello")</code> displays the text.</p>
-<h2>Events</h2><p><span class="block">when (green flag)</span> starts a script when the project is run.</p><pre>when (green flag)
-{
-    say ("Started!")
+    set (score) to (0)
 }</pre>
-<h2>Motion</h2><p>Common motion blocks include:</p><ul><li><code>move (10) steps</code></li><li><code>turn cw (15) degrees</code></li><li><code>go to x (0) y (0)</code></li><li><code>change x by (10)</code></li><li><code>change y by (10)</code></li></ul>
-<h2>Looks</h2><p><span class="block looks">say</span> displays text. Costumes can be selected by name.</p><pre>say ("Hello!") for (2) seconds
-switch costume to (costume1)
-next costume</pre>
-<h2>Variables</h2><p>Variables are expressions when used without quotes. Their value can be changed using the variable blocks supported by JAPPL.</p><pre>set (score) to (10)
-change (score) by (1)
-say (score)</pre>
-<h2>Lists</h2><p>Lists support adding, deleting, replacing and reading items where supported by the current compiler.</p><pre>add ("apple") to (my list)
-add ("banana") to (my list)</pre>
-<h2>Control</h2><p>Use loops and conditions to control scripts.</p><pre>repeat (10)
+<p>For example, <code>say ("hello")</code> produces the Scratch <code>looks_say</code> block with a text input, while <code>say (hello)</code> produces a variable reporter input. This distinction is important.</p>
+</section>
+
+<section id="motion" class="anchor"><h2><span class="cat motion">Motion</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>move (10) steps</td><td><code>move (10) steps</code></td><td><code>motion_movesteps</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>turn ↻ (15) degrees</td><td><code>turn cw (15) degrees</code></td><td><code>motion_turnright</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>turn ↺ (15) degrees</td><td><code>turn ccw (15) degrees</code></td><td><code>motion_turnleft</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>go to random position</td><td><code>go to (random position)</code></td><td><code>motion_goto</code> + menu</td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>go to mouse-pointer</td><td><code>go to (mouse pointer)</code></td><td><code>motion_goto</code> + menu</td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>go to x: (0) y: (0)</td><td><code>go to x (0) y (0)</code></td><td><code>motion_gotoxy</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>glide (1) secs to random position</td><td><code>glide (1) secs to (random position)</code></td><td><code>motion_glideto</code> + menu</td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>glide (1) secs to mouse-pointer</td><td><code>glide (1) secs to (mouse pointer)</code></td><td><code>motion_glideto</code> + menu</td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>glide (1) secs to x: (0) y: (0)</td><td><code>glide (1) secs to x (0) y (0)</code></td><td><code>motion_glidesecstoxy</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>point in direction (90)</td><td><code>point in direction (90)</code></td><td><code>motion_pointindirection</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>point towards mouse-pointer</td><td><code>point towards (mouse pointer)</code></td><td><code>motion_pointtowards</code> + menu</td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>change x by (10)</td><td><code>change x by (10)</code></td><td><code>motion_changexby</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>set x to (0)</td><td><code>set x to (0)</code></td><td><code>motion_setx</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>change y by (10)</td><td><code>change y by (10)</code></td><td><code>motion_changeyby</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>set y to (0)</td><td><code>set y to (0)</code></td><td><code>motion_sety</code></td><td class="status yes">Supported</td></tr>
+<tr class="no"><td>if on edge, bounce</td><td>—</td><td><code>motion_ifonedgebounce</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>set rotation style [left-right / don't rotate / all around]</td><td>—</td><td><code>motion_setrotationstyle</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>x position</td><td><code>x position</code></td><td><code>motion_xposition</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>y position</td><td><code>y position</code></td><td><code>motion_yposition</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>direction</td><td><code>direction</code></td><td><code>motion_direction</code></td><td class="status yes">Supported reporter</td></tr>
+</table></section>
+
+<section id="looks" class="anchor"><h2><span class="cat looks">Looks</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>say (Hello!)</td><td><code>say ("Hello!")</code></td><td><code>looks_say</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>say (Hello!) for (2) seconds</td><td><code>say ("Hello!") for (2) seconds</code></td><td><code>looks_sayforsecs</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>think (Hmm...) </td><td><code>think ("Hmm...")</code></td><td><code>looks_think</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>think (Hmm...) for (2) seconds</td><td><code>think ("Hmm...") for (2) seconds</code></td><td><code>looks_thinkforsecs</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>switch costume to [costume]</td><td><code>switch costume to (costume)</code></td><td><code>looks_switchcostumeto</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>next costume</td><td><code>next costume</code></td><td><code>looks_nextcostume</code></td><td class="status yes">Supported</td></tr>
+<tr class="no"><td>switch backdrop to [backdrop]</td><td>—</td><td><code>looks_switchbackdropto</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>next backdrop</td><td>—</td><td><code>looks_nextbackdrop</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>change size by (10)</td><td>—</td><td><code>looks_changesizeby</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>set size to (100)%</td><td>—</td><td><code>looks_setsizeto</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>change [color] effect by (25)</td><td>—</td><td><code>looks_changeeffectby</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>set [color] effect to (0)</td><td>—</td><td><code>looks_seteffectto</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>clear graphic effects</td><td>—</td><td><code>looks_cleargraphiceffects</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>show</td><td>—</td><td><code>looks_show</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>hide</td><td>—</td><td><code>looks_hide</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>go to front layer</td><td>—</td><td><code>looks_gotofrontback</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>go back (1) layers</td><td>—</td><td><code>looks_goforwardbackwardlayers</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>costume # / name</td><td><code>costume number</code> / <code>costume name</code></td><td><code>looks_costumenumbername</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>backdrop # / name</td><td><code>backdrop number</code> / <code>backdrop name</code></td><td><code>looks_backdropnumbername</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>size</td><td><code>size</code></td><td><code>looks_size</code></td><td class="status yes">Supported reporter</td></tr>
+</table></section>
+
+<section id="sound" class="anchor"><h2><span class="cat sound">Sound</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="no"><td>start sound [Meow]</td><td>—</td><td><code>sound_play</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>start sound [Meow] until done</td><td>—</td><td><code>sound_playuntildone</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>stop all sounds</td><td>—</td><td><code>sound_stopallsounds</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>change volume by (10)</td><td>—</td><td><code>sound_changevolumeby</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>set volume to (100)%</td><td>—</td><td><code>sound_setvolumeto</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>change [pitch] effect by (10)</td><td>—</td><td><code>sound_changeeffectby</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>set [pitch] effect to (10)</td><td>—</td><td><code>sound_seteffectto</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>clear sound effects</td><td>—</td><td><code>sound_cleareffects</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>volume</td><td><code>volume</code></td><td><code>sound_volume</code></td><td class="status yes">Supported reporter</td></tr>
+</table></section>
+
+<section id="events" class="anchor"><h2><span class="cat events">Events</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>when green flag clicked</td><td><code>when (green flag)</code></td><td><code>event_whenflagclicked</code></td><td class="status yes">Supported</td></tr>
+<tr class="no"><td>when [key] key pressed</td><td>—</td><td><code>event_whenkeypressed</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>when this sprite clicked</td><td>—</td><td><code>event_whenthisspriteclicked</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>when backdrop switches to [backdrop]</td><td>—</td><td><code>event_whenbackdropswitchesto</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>when [loudness] &gt; (10)</td><td>—</td><td><code>event_whengreaterthan</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>when I receive [message]</td><td>—</td><td><code>event_whenbroadcastreceived</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>broadcast [message]</td><td><code>broadcast (message)</code></td><td><code>event_broadcast</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>broadcast [message] and wait</td><td><code>broadcast (message) and wait</code></td><td><code>event_broadcastandwait</code></td><td class="status yes">Supported</td></tr>
+</table></section>
+
+<section id="control" class="anchor"><h2><span class="cat control">Control</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>wait (1) seconds</td><td><code>wait (1) seconds</code></td><td><code>control_wait</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>repeat (10)</td><td><code>repeat (10) { ... }</code></td><td><code>control_repeat</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>forever</td><td><code>forever { ... }</code></td><td><code>control_forever</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>if &lt;condition&gt; then</td><td><code>if &lt;condition&gt; { ... }</code></td><td><code>control_if</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>if &lt;condition&gt; then / else</td><td><code>if &lt;condition&gt; { ... } else { ... }</code></td><td><code>control_if_else</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>wait until &lt;condition&gt;</td><td><code>wait until &lt;condition&gt;</code></td><td><code>control_wait_until</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>repeat until &lt;condition&gt;</td><td><code>repeat until &lt;condition&gt; { ... }</code></td><td><code>control_repeat_until</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>stop [all / this script / other scripts]</td><td><code>stop (all)</code> / <code>stop (this script)</code> / <code>stop (other scripts in sprite)</code></td><td><code>control_stop</code></td><td class="status yes">Supported</td></tr>
+<tr class="no"><td>when I start as a clone</td><td>—</td><td><code>control_start_as_clone</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>create clone of [myself]</td><td>—</td><td><code>control_create_clone_of</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="no"><td>delete this clone</td><td>—</td><td><code>control_delete_this_clone</code></td><td class="status nope">Not implemented</td></tr>
+</table></section>
+
+<section id="sensing" class="anchor"><h2><span class="cat sensing">Sensing</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>touching [sprite / mouse-pointer / edge]?</td><td><code>touching (sprite)</code></td><td><code>sensing_touchingobject</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>touching color [color]?</td><td><code>touching color (#ff0000)</code></td><td><code>sensing_touchingcolor</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>color [color] is touching [color]?</td><td><code>color (#ff0000) touching color (#00ff00)</code></td><td><code>sensing_coloristouchingcolor</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>ask [What's your name?] and wait</td><td><code>ask ("What's your name?")</code></td><td><code>sensing_askandwait</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>answer</td><td><code>answer</code></td><td><code>sensing_answer</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>key [space] pressed?</td><td><code>key (space)</code></td><td><code>sensing_keypressed</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>mouse down?</td><td><code>mouse down</code></td><td><code>sensing_mousedown</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>mouse x</td><td><code>mouse x</code></td><td><code>sensing_mousex</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>mouse y</td><td><code>mouse y</code></td><td><code>sensing_mousey</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="no"><td>set drag mode [draggable / not draggable]</td><td>—</td><td><code>sensing_setdragmode</code></td><td class="status nope">Not implemented</td></tr>
+<tr class="supported"><td>loudness</td><td><code>loudness</code></td><td><code>sensing_loudness</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>timer</td><td><code>timer</code></td><td><code>sensing_timer</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>reset timer</td><td><code>reset timer</code></td><td><code>sensing_resettimer</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>current [year/month/date/day of week/hour/minute/second]</td><td><code>current (year)</code></td><td><code>sensing_current</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>days since 2000</td><td><code>days since 2000</code></td><td><code>sensing_dayssince2000</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>username</td><td><code>username</code></td><td><code>sensing_username</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>distance to [sprite / mouse-pointer]</td><td><code>distance to (sprite)</code></td><td><code>sensing_distanceto</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>[property] of [sprite]</td><td><code>sensing (property) of (sprite)</code></td><td><code>sensing_of</code></td><td class="status yes">Supported reporter</td></tr>
+</table></section>
+
+<section id="operators" class="anchor"><h2><span class="cat operators">Operators</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>( ) + ( )</td><td><code>(a) + (b)</code></td><td><code>operator_add</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) - ( )</td><td><code>(a) - (b)</code></td><td><code>operator_subtract</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) * ( )</td><td><code>(a) * (b)</code></td><td><code>operator_multiply</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) / ( )</td><td><code>(a) / (b)</code></td><td><code>operator_divide</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>pick random (1) to (10)</td><td><code>pick random (1) to (10)</code></td><td><code>operator_random</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) &gt; ( )</td><td><code>(a) &gt; (b)</code></td><td><code>operator_gt</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) &lt; ( )</td><td><code>(a) &lt; (b)</code></td><td><code>operator_lt</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) = ( )</td><td><code>(a) = (b)</code></td><td><code>operator_equals</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>&lt; &gt; and &lt; &gt;</td><td><code>(a) and (b)</code></td><td><code>operator_and</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>&lt; &gt; or &lt; &gt;</td><td><code>(a) or (b)</code></td><td><code>operator_or</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>not &lt; &gt;</td><td><code>not (condition)</code></td><td><code>operator_not</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>join [apple] [banana]</td><td><code>join ("apple") ("banana")</code></td><td><code>operator_join</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>letter (1) of [apple]</td><td><code>letter (1) of ("apple")</code></td><td><code>operator_letter_of</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>length of [apple]</td><td><code>length of ("apple")</code></td><td><code>operator_length</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>[apple] contains [a]?</td><td><code>contains ("apple") ("a")</code></td><td><code>operator_contains</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>( ) mod ( )</td><td><code>(a) mod (b)</code></td><td><code>operator_mod</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>round ( )</td><td><code>round (x)</code></td><td><code>operator_round</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>math operation [abs/sqrt/floor/ceiling/sin/cos/tan/asin/acos/atan/ln/log/e^/10^]</td><td><code>abs (x)</code>, <code>sqrt (x)</code>, <code>floor (x)</code>, <code>ceiling (x)</code>, <code>sin (x)</code>, <code>cos (x)</code>, <code>tan (x)</code>, <code>ln (x)</code>, <code>log (x)</code>, <code>exp (x)</code>, <code>exp10 (x)</code></td><td><code>operator_mathop</code></td><td class="status yes">Supported subset</td></tr>
+</table></section>
+
+<section id="variables" class="anchor"><h2><span class="cat variables">Variables &amp; Lists</span> Scratch → JAPPL</h2>
+<h3>Variables</h3>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>set [variable] to (0)</td><td><code>set (score) to (0)</code></td><td><code>data_setvariableto</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>change [variable] by (1)</td><td><code>change (score) by (1)</code></td><td><code>data_changevariableby</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>show variable [variable]</td><td><code>show variable (score)</code></td><td><code>data_showvariable</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>hide variable [variable]</td><td><code>hide variable (score)</code></td><td><code>data_hidevariable</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>variable reporter</td><td><code>score</code> or <code>variable (score)</code></td><td><code>data_variable</code></td><td class="status yes">Supported</td></tr>
+</table>
+<h3>Lists</h3>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 opcode</th><th>Status</th></tr>
+<tr class="supported"><td>add (item) to [list]</td><td><code>add ("item") to (my list)</code></td><td><code>data_addtolist</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>delete (1) of [list]</td><td><code>delete (1) of (my list)</code></td><td><code>data_deleteoflist</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>delete all of [list]</td><td><code>delete all of (my list)</code></td><td><code>data_deletealloflist</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>insert (item) at (1) of [list]</td><td><code>insert ("item") at (1) of (my list)</code></td><td><code>data_insertatlist</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>replace item (1) of [list] with (item)</td><td><code>replace item (1) of (my list) with ("item")</code></td><td><code>data_replaceitemoflist</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>item (1) of [list]</td><td><code>item (1) of (my list)</code></td><td><code>data_itemoflist</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>item # of (item) in [list]</td><td><code>item number ("item") in (my list)</code></td><td><code>data_itemnumoflist</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>[list] contains (item)?</td><td><code>list (my list) contains ("item")</code></td><td><code>data_listcontainsitem</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>length of [list]</td><td><code>length of list (my list)</code></td><td><code>data_lengthoflist</code></td><td class="status yes">Supported reporter</td></tr>
+<tr class="supported"><td>show list [list]</td><td><code>show list (my list)</code></td><td><code>data_showlist</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>hide list [list]</td><td><code>hide list (my list)</code></td><td><code>data_hidelist</code></td><td class="status yes">Supported</td></tr>
+</table></section>
+
+<section id="myblocks" class="anchor"><h2><span class="cat myblocks">My Blocks</span> Scratch → JAPPL</h2>
+<table><tr><th>Scratch block</th><th>JAPPL</th><th>SB3 representation</th><th>Status</th></tr>
+<tr class="supported"><td>define [my block]</td><td>Custom-block syntax supported by JAPPL</td><td><code>procedures_definition</code> + prototype/mutation</td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>run without screen refresh</td><td>Custom procedure calls are emitted with mutation metadata; warp behavior follows compiler defaults</td><td><code>procedures_call</code></td><td class="status yes">Supported</td></tr>
+<tr class="supported"><td>custom block parameters</td><td>Use the compiler's custom-block parameter syntax</td><td><code>argument_reporter_string_number</code> / <code>argument_reporter_boolean</code></td><td class="status yes">Supported</td></tr>
+</table></section>
+
+<section id="extensions" class="anchor"><h2><span class="cat sensing">Extensions</span> and non-core blocks</h2>
+<p>Scratch also has extensions such as Pen, Music, Video Sensing, Text to Speech, Translate, micro:bit, Makey Makey and experimental Scratch Lab features. These are separate from the core Scratch block set and are not currently emitted by the JAPPL compiler.</p>
+<table><tr><th>Extension / feature</th><th>JAPPL conversion</th></tr>
+<tr><td>Pen</td><td>Not implemented</td></tr><tr><td>Music</td><td>Not implemented</td></tr><tr><td>Video Sensing</td><td>Not implemented</td></tr><tr><td>Text to Speech</td><td>Not implemented</td></tr><tr><td>Translate</td><td>Not implemented</td></tr><tr><td>micro:bit / hardware extensions</td><td>Not implemented</td></tr><tr><td>Makey Makey</td><td>Not implemented</td></tr><tr><td>Scratch Lab experimental blocks</td><td>Not implemented</td></tr>
+</table></section>
+
+<section id="syntax" class="anchor"><h2>JAPPL Syntax</h2>
+<div class="grid">
+<div class="card"><h3>Text</h3><p>Use quotes for literal text.</p><pre>say ("hello world")</pre></div>
+<div class="card"><h3>Variables</h3><p>Use a variable name when you want its value.</p><pre>set (score) to (10)
+say (score)</pre></div>
+<div class="card"><h3>Blocks with bodies</h3><p>Use braces for Scratch C-block contents.</p><pre>repeat (10)
 {
     move (10) steps
-}
-if &lt;score &gt; 10&gt;
+}</pre></div>
+<div class="card"><h3>Conditions</h3><pre>if &lt;(score) &gt; (10)&gt;
 {
-    say ("High score!")
-}</pre>
-<h2>Operators &amp; strings</h2><p>JAPPL supports Scratch-style arithmetic, comparisons and boolean expressions. Use parentheses for block inputs and quotes for literal strings.</p><pre>say ((2) + (3))
-say ("hello world")
-say (score)</pre>
-<h2>Custom blocks</h2><p>Custom blocks can be declared and called using JAPPL's custom-block syntax supported by the compiler.</p>
-<h2>Costumes</h2><p>Add image files through the IDE's <b>Costumes</b> panel. When you compile, the assets are included in the generated SB3.</p>
-<h2>Compile &amp; Run</h2><ol><li>Write your JAPPL program in the center editor.</li><li>Click <b>Compile &amp; Run</b>.</li><li>The generated SB3 is packaged locally and shown in the stage.</li><li>Use the green flag and stop buttons to control the project.</li></ol>
-<h2>Tips</h2><ul><li>Quote literal text: <code>"hello"</code>.</li><li>Use variable names without quotes when you want their value.</li><li>Compile after changing source or costumes.</li><li>If compilation fails, check the error panel below the editor.</li></ul>
-</main></body></html>
+    say ("High score")
+}</pre></div>
+<div class="card"><h3>Costumes</h3><pre>switch costume to (costume1)
+next costume</pre><p>Costume assets are packaged into the generated SB3 by the IDE/compiler pipeline.</p></div>
+<div class="card"><h3>Lists</h3><pre>add ("apple") to (fruits)
+say (item (1) of (fruits))</pre></div>
+</div>
+<div class="ok"><b>Conversion rule:</b> JAPPL is not a textual Scratch clone. The compiler creates real Scratch block JSON, including opcodes, inputs, fields, parent/next links and nested substacks. That is why the generated file opens as an SB3 project rather than merely displaying JAPPL source.</div>
+<h2>Current conversion priority</h2>
+<ol><li>Core Motion, Looks, Events, Control, Sensing, Operators, Variables/Lists and My Blocks are documented above.</li><li>Rows marked <b>Supported</b> are the current compiler surface.</li><li>Rows marked <b>Not implemented</b> are deliberately left visible so the documentation can grow as the compiler gains blocks.</li><li>When a block is implemented, its row should be changed from Not implemented to Supported and its exact JAPPL syntax should be added.</li></ol>
+</section>
+</main>
+</body>
+</html>
