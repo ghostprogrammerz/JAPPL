@@ -1133,10 +1133,11 @@ async function initScratch(canvas) {
     }
 
     // load scripts sequentially — vm depends on render+storage being on window first
+    const backendUrl = document.getElementById('backend-url').value.trim();
     const scripts = [
-      '/static/scratch-storage.js',
-      '/static/scratch-render.js',
-      '/static/scratch-vm.js',
+      `${backendUrl}/static/scratch-storage.js`,
+      `${backendUrl}/static/scratch-render.js`,
+      `${backendUrl}/static/scratch-vm.js`,
     ];
     function loadNext(i) {
       if (i >= scripts.length) { doInit(); return; }
