@@ -114,6 +114,52 @@ Token lexer_next(Lexer *l) {
         case '=': l->pos++; return make_tok(TOK_EQUAL,    "=", line);
     }
 
+    /* quoted string literal */
+    if (c == '"') {
+        l->pos++;
+        size_t cap = 64;
+        size_t len = 0;
+        char *buf = malloc(cap);
+        if (!buf) return make_tok(TOK_STRING, "", line);
+
+        while (l->src[l->pos] && l->src[l->pos] != '"') {
+            char ch = l->src[l->pos++];
+            if (ch == '\\' && l->src[l->pos]) {
+                char esc = l->src[l->pos++];
+                switch (esc) {
+                    case 'n': ch = '\n'; break;
+                    case 'r': ch = '\r'; break;
+                    case 't': ch = '\t'; break;
+                    case '"': ch = '"'; break;
+                    case '\\': ch = '\\'; break;
+                    default:
+                        /* Preserve unknown escapes as the escaped character. */
+                        ch = esc;
+                        break;
+                }
+            } else if (ch == '\n') {
+                l->line++;
+            }
+
+            if (len + 1 >= cap) {
+                cap *= 2;
+                char *grown = realloc(buf, cap);
+                if (!grown) {
+                    free(buf);
+                    return make_tok(TOK_STRING, "", line);
+                }
+                buf = grown;
+            }
+            buf[len++] = ch;
+        }
+
+        if (l->src[l->pos] == '"') l->pos++;
+        buf[len] = '\0';
+        Token t = make_tok(TOK_STRING, buf, line);
+        free(buf);
+        return t;
+    }
+
     /* number */
     if (isdigit((unsigned char)c) || (c == '-' && isdigit((unsigned char)l->src[l->pos+1]))) {
         int start = l->pos;
