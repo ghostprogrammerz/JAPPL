@@ -1132,20 +1132,21 @@ async function initScratch(canvas) {
       doInit(); return;
     }
 
-    // load scripts from backend /static/
-    let loaded = 0;
+    // load scripts sequentially — vm depends on render+storage being on window first
     const scripts = [
       '/static/scratch-storage.js',
       '/static/scratch-render.js',
       '/static/scratch-vm.js',
     ];
-    scripts.forEach(src => {
+    function loadNext(i) {
+      if (i >= scripts.length) { doInit(); return; }
       const s = document.createElement('script');
-      s.src = src;
-      s.onload = () => { if (++loaded === scripts.length) doInit(); };
-      s.onerror = () => reject(new Error(`Failed to load ${src}`));
+      s.src = scripts[i];
+      s.onload = () => loadNext(i + 1);
+      s.onerror = () => reject(new Error(`Failed to load ${scripts[i]}`));
       document.head.appendChild(s);
-    });
+    }
+    loadNext(0);
   });
 }
 
