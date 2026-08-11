@@ -196,7 +196,7 @@ static void handle_static(int fd, const char *url_path) {
             http_respond(fd, 403, "text/plain", "Forbidden\n", 10);
             return;
         }
-        snprintf(disk_path, sizeof(disk_path), "%s/../%s/%s", g_static_dir, subdir, file);
+        snprintf(disk_path, sizeof(disk_path), "%s/%s/%s", g_static_dir, subdir, file);
     } else {
         http_respond(fd, 404, "text/plain", "Not Found\n", 10);
         return;

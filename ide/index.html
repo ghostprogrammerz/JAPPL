@@ -1094,10 +1094,24 @@ async function initScratch(canvas) {
   const renderer = new Renderer(canvas);
   vm.attachRenderer(renderer);
 
-  // attach bitmap adapter (bundled in scratch-render)
-  if (window.ScratchRender.BitmapAdapter) {
-    vm.attachV2BitmapAdapter(new window.ScratchRender.BitmapAdapter());
-  }
+  // attach bitmap adapter — BitmapAdapter is not top-level exported,
+  // so provide a minimal canvas-based implementation inline
+  vm.attachV2BitmapAdapter({
+    resize(image, newWidth, newHeight) {
+      const canvas = document.createElement('canvas');
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      canvas.getContext('2d').drawImage(image, 0, 0, newWidth, newHeight);
+      return canvas;
+    },
+    convertDataURIToBinary(dataURI) {
+      const base64 = dataURI.split(',')[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+  });
 
   const storage = new Storage();
   const AssetType = window.ScratchStorage.AssetType;
