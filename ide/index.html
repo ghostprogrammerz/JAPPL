@@ -611,6 +611,9 @@
 </div>
 
 <!-- MONACO -->
+<script src="http://localhost:8765/static/scratch-storage.js"></script>
+<script src="http://localhost:8765/static/scratch-render.js"></script>
+<script src="http://localhost:8765/static/scratch-vm.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
 <script>
 // ─────────────────────────────────────────────
@@ -1077,77 +1080,41 @@ async function loadProject(blob) {
 }
 
 async function initScratch(canvas) {
-  return new Promise((resolve, reject) => {
-    // scratch-vm, scratch-render, scratch-storage must be loaded as scripts
-    function doInit() {
-      const VM = window.VirtualMachine;
-      const Renderer = window.ScratchRender;
-      const Storage = window.ScratchStorage;
+  const VM = window.VirtualMachine;
+  const Renderer = window.ScratchRender;
+  const Storage = window.ScratchStorage;
 
-      if (!VM || !Renderer || !Storage) {
-        reject(new Error('Scratch libs not loaded — is the C backend serving /static/?'));
-        return;
-      }
+  if (!VM || !Renderer || !Storage) {
+    throw new Error('Scratch libs not loaded — is the server running on localhost:8765?');
+  }
 
-      const vm = new VM();
-      window._vm = vm;
+  const vm = new VM();
+  window._vm = vm;
 
-      // renderer
-      const renderer = new Renderer(canvas);
-      vm.attachRenderer(renderer);
+  const renderer = new Renderer(canvas);
+  vm.attachRenderer(renderer);
 
-      // storage
-      const storage = new Storage();
-      // teach storage to handle asset fetches (default scratch CDN)
-      const AssetType = storage.AssetType;
-      storage.addWebStore(
-        [AssetType.ImageVector, AssetType.ImageBitmap, AssetType.Sound],
-        asset => `https://assets.scratch.mit.edu/internalapi/asset/${asset.assetId}.${asset.dataFormat}/get/`
-      );
-      vm.attachStorage(storage);
+  const storage = new Storage();
+  const AssetType = storage.AssetType;
+  storage.addWebStore(
+    [AssetType.ImageVector, AssetType.ImageBitmap, AssetType.Sound],
+    asset => `https://assets.scratch.mit.edu/internalapi/asset/${asset.assetId}.${asset.dataFormat}/get/`
+  );
+  vm.attachStorage(storage);
 
-      // audio (optional — graceful if missing)
-      if (window.AudioEngine) {
-        const audio = new window.AudioEngine();
-        vm.attachAudioEngine(audio);
-      }
+  if (window.AudioEngine) {
+    const audio = new window.AudioEngine();
+    vm.attachAudioEngine(audio);
+  }
 
-      // resize canvas to match container
-      resizeStage();
-      window.addEventListener('resize', resizeStage);
+  resizeStage();
+  window.addEventListener('resize', resizeStage);
 
-      // runtime events
-      vm.runtime.on('PROJECT_RUN_START', () => {
-        document.getElementById('stage-label').textContent = 'Running';
-      });
-      vm.runtime.on('PROJECT_RUN_STOP', () => {
-        document.getElementById('stage-label').textContent = 'Stopped';
-      });
-
-      resolve();
-    }
-
-    // if already loaded (e.g. second compile), just init
-    if (window.VirtualMachine && window.ScratchRender && window.ScratchStorage) {
-      doInit(); return;
-    }
-
-    // load scripts sequentially — vm depends on render+storage being on window first
-    const backendUrl = document.getElementById('backend-url').value.trim();
-    const scripts = [
-      `${backendUrl}/static/scratch-storage.js`,
-      `${backendUrl}/static/scratch-render.js`,
-      `${backendUrl}/static/scratch-vm.js`,
-    ];
-    function loadNext(i) {
-      if (i >= scripts.length) { doInit(); return; }
-      const s = document.createElement('script');
-      s.src = scripts[i];
-      s.onload = () => loadNext(i + 1);
-      s.onerror = () => reject(new Error(`Failed to load ${scripts[i]}`));
-      document.head.appendChild(s);
-    }
-    loadNext(0);
+  vm.runtime.on('PROJECT_RUN_START', () => {
+    document.getElementById('stage-label').textContent = 'Running';
+  });
+  vm.runtime.on('PROJECT_RUN_STOP', () => {
+    document.getElementById('stage-label').textContent = 'Stopped';
   });
 }
 
