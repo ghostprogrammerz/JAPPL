@@ -208,6 +208,53 @@ static char *zip_read_file(const char *path, const char *name, int *out_len) {
     return NULL;
 }
 
+/* Binary-safe zip reader — does NOT null-terminate, suitable for assets. */
+static unsigned char *zip_read_raw(const char *path, const char *name, int *out_len) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET);
+    unsigned char *data = malloc(sz);
+    fread(data,1,sz,f); fclose(f);
+
+    int pos=0;
+    while (pos+30 < sz) {
+        if (data[pos]!=0x50||data[pos+1]!=0x4b||data[pos+2]!=0x03||data[pos+3]!=0x04) break;
+        int comp = data[pos+8] |(data[pos+9]<<8);
+        int csz  = data[pos+18]|(data[pos+19]<<8)|(data[pos+20]<<16)|(data[pos+21]<<24);
+        int usz  = data[pos+22]|(data[pos+23]<<8)|(data[pos+24]<<16)|(data[pos+25]<<24);
+        int nlen = data[pos+26]|(data[pos+27]<<8);
+        int elen = data[pos+28]|(data[pos+29]<<8);
+        char fname[512]={0};
+        int fnlen = nlen < 511 ? nlen : 511;
+        memcpy(fname, data+pos+30, fnlen);
+        int data_start = pos+30+nlen+elen;
+
+        if (strcmp(fname, name)==0) {
+            unsigned char *out = malloc(usz+1);
+            if (comp==0) {
+                memcpy(out, data+data_start, usz);
+            } else if (comp==8) {
+                z_stream zs = {0};
+                zs.next_in   = data+data_start;
+                zs.avail_in  = csz;
+                zs.next_out  = out;
+                zs.avail_out = usz;
+                inflateInit2(&zs, -15);
+                inflate(&zs, Z_FINISH);
+                inflateEnd(&zs);
+            } else {
+                free(out); free(data); return NULL;
+            }
+            if (out_len) *out_len = usz;
+            free(data);
+            return out;
+        }
+        pos = data_start + csz;
+    }
+    free(data);
+    return NULL;
+}
+
 /* ── output buffer ──────────────────────────────────────────────── */
 typedef struct { char *buf; int len; int cap; } Buf;
 static void buf_init(Buf *b){b->buf=malloc(4096);b->cap=4096;b->len=0;b->buf[0]=0;}
@@ -1443,6 +1490,37 @@ int decompile_sb3(const char *sb3_path, const char *out_zip_path) {
                  fname,
                  (const unsigned char*)ltxt.buf, ltxt.len);
         free(ltxt.buf);
+    }
+
+    /* ── 5. copy costume and sound assets from source sb3 ───────── */
+    for (int i=0;i<targets->arr.count;i++) {
+        JVal *t = targets->arr.items[i];
+        static const char *asset_keys[] = { "costumes", "sounds", NULL };
+        for (int ak=0; asset_keys[ak]; ak++) {
+            JVal *arr = jobj_get(t, asset_keys[ak]);
+            if (!arr || arr->type!=JArr) continue;
+            for (int c=0;c<arr->arr.count;c++) {
+                JVal *item = arr->arr.items[c];
+                if (!item || item->type!=JObj) continue;
+                JVal *md5v = jobj_get(item, "md5ext");
+                if (!md5v || md5v->type!=JStr) continue;
+                const char *assetname = md5v->string;
+                /* deduplicate */
+                int already=0;
+                for (int k=0;k<ne;k++) {
+                    if (strcmp(entries[k].name, assetname)==0) { already=1; break; }
+                }
+                if (already) continue;
+                int alen=0;
+                unsigned char *abuf = zip_read_raw(sb3_path, assetname, &alen);
+                if (!abuf) {
+                    fprintf(stderr,"warning: asset '%s' not found in %s\n", assetname, sb3_path);
+                    continue;
+                }
+                zip2_add(&z,&entries,&ne,&ecap, assetname, abuf, alen);
+                free(abuf);
+            }
+        }
     }
 
     zip2_finish(&z, entries, ne);
