@@ -554,7 +554,7 @@
           </svg>
           <p>Compile to see your project</p>
         </div>
-        <canvas id="stage-canvas" style="display:none;width:100%;height:100%;image-rendering:pixelated"></canvas>
+        <iframe id="stage-iframe" style="display:none;width:100%;height:100%;border:none;" allow="autoplay" sandbox="allow-scripts allow-same-origin"></iframe>
       </div>
     </div>
 
@@ -611,9 +611,6 @@
 </div>
 
 <!-- MONACO -->
-<script src="http://localhost:8765/static/scratch-storage.js"></script>
-<script src="http://localhost:8765/static/scratch-render.js"></script>
-<script src="http://localhost:8765/static/scratch-vm.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
 <script>
 // ─────────────────────────────────────────────
@@ -1050,102 +1047,50 @@ async function loadProject(blob) {
   setStatus('loading…', '');
   document.getElementById('stage-label').textContent = 'Loading…';
   document.getElementById('stage-placeholder').style.display = 'none';
-  const canvas = document.getElementById('stage-canvas');
-  canvas.style.display = 'block';
 
+  const iframe = document.getElementById('stage-iframe');
+  iframe.style.display = 'block';
+
+  // Convert blob to base64 data URI and pass to TurboWarp via URL
   const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  const b64 = btoa(binary);
 
-  if (window._vm) {
-    window._vm.stopAll();
-    window._vm.clear();
-  }
+  // Store on window so the iframe's onload can access it
+  window._pendingSb3 = b64;
 
-  // init VM + renderer lazily
-  if (!window._vm) {
-    await initScratch(canvas);
-  } else {
-    resizeStage();
-  }
-
-  try {
-    await window._vm.loadProject(buf);
-    window._vm.start();
-    window._vm.greenFlag();
+  iframe.src = 'https://turbowarp.org/editor?noControls';
+  iframe.onload = () => {
+    // TurboWarp accepts a project via postMessage with {type:'SET_PROJECT', project:<ArrayBuffer>}
+    iframe.contentWindow.postMessage({
+      type: 'SET_PROJECT',
+      project: buf
+    }, 'https://turbowarp.org');
     setStatus('running', 'ok');
     document.getElementById('stage-label').textContent = 'Running';
-  } catch(e) {
-    setStatus('load error', 'err');
-    showErrors([String(e)]);
-  }
+  };
 }
 
-async function initScratch(canvas) {
-  const VM      = window.VirtualMachine;
-  const Renderer = window.ScratchRender;
-  const Storage  = window.ScratchStorage && window.ScratchStorage.ScratchStorage;
-
-  if (!VM || !Renderer || !Storage) {
-    throw new Error('Scratch libs not loaded — is the server running on localhost:8765?');
-  }
-
-  const vm = new VM();
-  window._vm = vm;
-
-  const renderer = new Renderer(canvas);
-  vm.attachRenderer(renderer);
-
-  // attach bitmap adapter — BitmapAdapter is not top-level exported,
-  // so provide a minimal canvas-based implementation inline
-  vm.attachV2BitmapAdapter({
-    resize(image, newWidth, newHeight) {
-      const canvas = document.createElement('canvas');
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-      canvas.getContext('2d').drawImage(image, 0, 0, newWidth, newHeight);
-      return canvas;
-    },
-    convertDataURIToBinary(dataURI) {
-      const base64 = dataURI.split(',')[1];
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes;
-    }
-  });
-
-  const storage = new Storage();
-  const AssetType = window.ScratchStorage.AssetType;
-  storage.addWebStore(
-    [AssetType.ImageVector, AssetType.ImageBitmap, AssetType.Sound],
-    asset => `https://assets.scratch.mit.edu/internalapi/asset/${asset.assetId}.${asset.dataFormat}/get/`
-  );
-  vm.attachStorage(storage);
-
-  if (window.AudioEngine) {
-    const audio = new window.AudioEngine();
-    vm.attachAudioEngine(audio);
-  }
-
-  resizeStage();
-  window.addEventListener('resize', resizeStage);
-
-  vm.runtime.on('PROJECT_RUN_START', () => {
-    document.getElementById('stage-label').textContent = 'Running';
-  });
-  vm.runtime.on('PROJECT_RUN_STOP', () => {
-    document.getElementById('stage-label').textContent = 'Stopped';
-  });
+function greenFlag() {
+  const iframe = document.getElementById('stage-iframe');
+  if (iframe.style.display === 'none') { compileAndRun(); return; }
+  iframe.contentWindow.postMessage({ type: 'GREEN_FLAG' }, 'https://turbowarp.org');
 }
 
-function resizeStage() {
-  if (!window._vm) return;
-  const container = document.getElementById('stage-container');
-  const w = container.offsetWidth;
-  const h = container.offsetHeight;
-  const canvas = document.getElementById('stage-canvas');
-  canvas.width = w;
-  canvas.height = h;
-  window._vm.renderer && window._vm.renderer.resize(w, h);
+function stopAll() {
+  const iframe = document.getElementById('stage-iframe');
+  if (iframe.style.display === 'none') return;
+  iframe.contentWindow.postMessage({ type: 'STOP_ALL' }, 'https://turbowarp.org');
+  document.getElementById('stage-label').textContent = 'Stopped';
+}
+
+function updateStageSize() {
+  const panel = document.getElementById('right-panel');
+  const w = panel.offsetWidth;
+  const h = Math.round(w * 0.75);
+  document.getElementById('stage-container').style.height = Math.min(h, 280) + 'px';
 }
 
 function downloadSb3() {
@@ -1156,35 +1101,9 @@ function downloadSb3() {
   a.click();
 }
 
-// ─────────────────────────────────────────────
-// STAGE CONTROLS
-// ─────────────────────────────────────────────
-function greenFlag() {
-  if (!window._vm) { compileAndRun(); return; }
-  window._vm.greenFlag();
-  document.getElementById('stage-label').textContent = 'Running';
-}
-
-function stopAll() {
-  if (!window._vm) return;
-  window._vm.stopAll();
-  document.getElementById('stage-label').textContent = 'Stopped';
-}
-
 function fullscreen() {
-  const container = document.getElementById('stage-container');
-  if (container.requestFullscreen) container.requestFullscreen();
-}
-
-// ─────────────────────────────────────────────
-// RESIZE: make stage square-ish based on panel width
-// ─────────────────────────────────────────────
-function updateStageSize() {
-  const panel = document.getElementById('right-panel');
-  const w = panel.offsetWidth;
-  const h = Math.round(w * 0.75); // 4:3
-  document.getElementById('stage-container').style.height = Math.min(h, 280) + 'px';
-  resizeStage();
+  const iframe = document.getElementById('stage-iframe');
+  if (iframe && iframe.requestFullscreen) iframe.requestFullscreen();
 }
 window.addEventListener('resize', updateStageSize);
 updateStageSize();
