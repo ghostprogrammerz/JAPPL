@@ -22,6 +22,7 @@ $(SRV): $(SRV_OBJ)
 PORT ?= 8080
 
 run: all
+	@test -d ide/node_modules || (echo "Installing npm deps..." && cd ide && npm install)
 	@pkill -x jappl2sb3-server 2>/dev/null || true
 	@sleep 0.1
 	@./jappl2sb3-server $(PORT) &
