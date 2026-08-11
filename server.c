@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -32,10 +34,6 @@ static void send_all(int fd, const char *buf, size_t len) {
     }
 }
 
-static void send_str(int fd, const char *s) {
-    send_all(fd, s, strlen(s));
-}
-
 static void http_respond(int fd, int status, const char *type,
                          const char *body, size_t len) {
     const char *reason = status == 200 ? "OK" :
@@ -55,7 +53,7 @@ static void http_respond(int fd, int status, const char *type,
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n\r\n",
         status, reason, type, len);
-    send_str(fd, header);
+    send_all(fd, header, strlen(header));
     if (body && len) send_all(fd, body, len);
 }
 
@@ -64,16 +62,17 @@ static char *read_file_binary(const char *path, size_t *out_len) {
     if (!f) return NULL;
     if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
     long size = ftell(f);
-    if (size <= 0) { fclose(f); return NULL; }
+    if (size < 0) { fclose(f); return NULL; }
     rewind(f);
-    char *buf = malloc((size_t)size);
+    char *buf = malloc((size_t)size + 1);
     if (!buf) { fclose(f); return NULL; }
-    if (fread(buf, 1, (size_t)size, f) != (size_t)size) {
+    if (size && fread(buf, 1, (size_t)size, f) != (size_t)size) {
         free(buf);
         fclose(f);
         return NULL;
     }
     fclose(f);
+    buf[size] = '\0';
     *out_len = (size_t)size;
     return buf;
 }
@@ -81,7 +80,6 @@ static char *read_file_binary(const char *path, size_t *out_len) {
 typedef struct {
     char method[8];
     char path[256];
-    size_t content_length;
     char *body;
     size_t body_len;
 } Request;
@@ -102,11 +100,12 @@ static int read_request(int fd, Request *r) {
         }
         ssize_t n = read(fd, headers + hlen, cap - hlen);
         if (n <= 0) { free(headers); return -1; }
+        size_t old = hlen;
         hlen += (size_t)n;
-        size_t start = hlen >= (size_t)n + 3 ? hlen - (size_t)n - 3 : 0;
-        for (size_t i = start; i + 3 < hlen; i++) {
-            if (headers[i] == '\r' && headers[i + 1] == '\n' &&
-                headers[i + 2] == '\r' && headers[i + 3] == '\n') {
+        size_t start = old > 3 ? old - 3 : 0;
+        for (size_t i = start; i + 3 < hlen; ++i) {
+            if (headers[i] == '\r' && headers[i+1] == '\n' &&
+                headers[i+2] == '\r' && headers[i+3] == '\n') {
                 header_end = i + 4;
                 goto headers_done;
             }
@@ -115,51 +114,50 @@ static int read_request(int fd, Request *r) {
 
 headers_done:
     {
-        char *p = headers;
-        char *sp1 = memchr(p, ' ', header_end);
+        char *sp1 = memchr(headers, ' ', header_end);
         if (!sp1) { free(headers); return -1; }
-        size_t method_len = (size_t)(sp1 - p);
-        if (method_len >= sizeof(r->method)) { free(headers); return -1; }
-        memcpy(r->method, p, method_len);
-        r->method[method_len] = '\0';
-        p = sp1 + 1;
+        size_t ml = (size_t)(sp1 - headers);
+        if (ml >= sizeof(r->method)) { free(headers); return -1; }
+        memcpy(r->method, headers, ml);
+        r->method[ml] = '\0';
+
+        char *p = sp1 + 1;
         char *sp2 = memchr(p, ' ', header_end - (size_t)(p - headers));
         if (!sp2) { free(headers); return -1; }
-        size_t path_len = (size_t)(sp2 - p);
-        if (path_len >= sizeof(r->path)) path_len = sizeof(r->path) - 1;
-        memcpy(r->path, p, path_len);
-        r->path[path_len] = '\0';
+        size_t pl = (size_t)(sp2 - p);
+        if (pl >= sizeof(r->path)) pl = sizeof(r->path) - 1;
+        memcpy(r->path, p, pl);
+        r->path[pl] = '\0';
     }
 
-    r->content_length = 0;
+    size_t content_length = 0;
     char *line = memchr(headers, '\n', header_end);
     while (line) {
-        line++;
+        ++line;
         if (strncasecmp(line, "content-length:", 15) == 0) {
-            r->content_length = (size_t)atoll(line + 15);
+            content_length = (size_t)atoll(line + 15);
             break;
         }
         if ((size_t)(line - headers) >= header_end) break;
         line = memchr(line, '\n', header_end - (size_t)(line - headers));
     }
-    if (r->content_length > MAX_REQUEST) { free(headers); return -1; }
+    if (content_length > MAX_REQUEST) { free(headers); return -1; }
 
     size_t already = hlen - header_end;
-    size_t total = r->content_length;
-    r->body = malloc(total + 1);
+    if (already > content_length) already = content_length;
+    r->body = malloc(content_length + 1);
     if (!r->body) { free(headers); return -1; }
-    if (already > total) already = total;
     if (already) memcpy(r->body, headers + header_end, already);
     free(headers);
 
     size_t got = already;
-    while (got < total) {
-        ssize_t n = read(fd, r->body + got, total - got);
+    while (got < content_length) {
+        ssize_t n = read(fd, r->body + got, content_length - got);
         if (n <= 0) { free(r->body); r->body = NULL; return -1; }
         got += (size_t)n;
     }
-    r->body[total] = '\0';
-    r->body_len = total;
+    r->body[content_length] = '\0';
+    r->body_len = content_length;
     return 0;
 }
 
@@ -169,86 +167,97 @@ static const char *mime_for(const char *path) {
     if (!strcmp(dot, ".html")) return "text/html; charset=utf-8";
     if (!strcmp(dot, ".js")) return "application/javascript; charset=utf-8";
     if (!strcmp(dot, ".css")) return "text/css; charset=utf-8";
+    if (!strcmp(dot, ".svg")) return "image/svg+xml";
+    if (!strcmp(dot, ".png")) return "image/png";
+    if (!strcmp(dot, ".jpg") || !strcmp(dot, ".jpeg")) return "image/jpeg";
+    if (!strcmp(dot, ".json")) return "application/json; charset=utf-8";
     return "application/octet-stream";
 }
 
 /*
- * The existing IDE calls its stage iframe #tw-iframe. Keep the runtime
- * controller here only as a compatibility layer; it never contacts
- * turbowarp.org and loads the locally generated /preview HTML instead.
+ * Patch only the old preview functions in memory. This avoids injecting
+ * JavaScript before the document and keeps ide/index.html valid HTML.
+ * The packaged project itself is still generated locally by package-runtime.js.
  */
-static const char *preview_controller =
-    "<script>(function(){"
-    "function frame(){return document.getElementById('tw-iframe');}"
-    "function backend(){var e=document.getElementById('backend-url');return e?e.value.trim():location.origin;}"
-    "window.loadProject=function(){"
-        "var f=frame();if(!f)return;"
-        "var p=document.getElementById('stage-placeholder');"
-        "var l=document.getElementById('stage-label');"
-        "if(p)p.style.display='none';"
-        "f.style.display='block';"
-        "if(l)l.textContent='Loading…';"
-        "f.onload=function(){if(l)l.textContent='Running';if(typeof setStatus==='function')setStatus('running','ok');};"
-        "f.onerror=function(){if(l)l.textContent='Preview failed';if(typeof setStatus==='function')setStatus('preview failed','err');};"
-        "f.src=backend()+'/preview?ts='+Date.now();"
-    "};"
-    "window.greenFlag=function(){"
-        "var f=frame();"
-        "if(!f||f.style.display==='none'){if(typeof compileAndRun==='function')compileAndRun();return;}"
-        "f.src=f.src.split('?')[0]+'?ts='+Date.now();"
-    "};"
-    "window.stopAll=function(){"
-        "var f=frame();if(!f)return;"
-        "f.src='about:blank';f.style.display='none';"
-        "var p=document.getElementById('stage-placeholder');"
-        "var l=document.getElementById('stage-label');"
-        "if(p)p.style.display='flex';if(l)l.textContent='Stopped';"
-        "if(typeof setStatus==='function')setStatus('stopped','');"
-    "};"
-    "window.fullscreen=function(){var f=frame();if(f&&f.requestFullscreen)f.requestFullscreen();};"
-    "})();</script>";
+static char *build_ide_html(size_t *out_len) {
+    size_t len = 0;
+    char *html = read_file_binary(g_ide_html, &len);
+    if (!html) return NULL;
+
+    const char *start_marker = "async function loadProject(blob) {";
+    const char *end_marker = "function updateStageSize()";
+    char *start = strstr(html, start_marker);
+    if (!start) {
+        *out_len = len;
+        return html;
+    }
+    char *end = strstr(start, end_marker);
+    if (!end) {
+        *out_len = len;
+        return html;
+    }
+
+    static const char replacement[] =
+        "async function loadProject(blob) {\n"
+        "  setStatus('loading…', '');\n"
+        "  document.getElementById('stage-label').textContent = 'Loading…';\n"
+        "  document.getElementById('stage-placeholder').style.display = 'none';\n"
+        "  const iframe = document.getElementById('stage-iframe');\n"
+        "  iframe.style.display = 'block';\n"
+        "  const backendUrl = document.getElementById('backend-url').value.trim() || location.origin;\n"
+        "  iframe.onload = () => {\n"
+        "    setStatus('running', 'ok');\n"
+        "    document.getElementById('stage-label').textContent = 'Running';\n"
+        "  };\n"
+        "  iframe.onerror = () => {\n"
+        "    setStatus('preview failed', 'err');\n"
+        "    document.getElementById('stage-label').textContent = 'Preview failed';\n"
+        "  };\n"
+        "  iframe.src = backendUrl + '/preview?ts=' + Date.now();\n"
+        "}\n\n"
+        "function greenFlag() {\n"
+        "  const iframe = document.getElementById('stage-iframe');\n"
+        "  if (!iframe || iframe.style.display === 'none') { compileAndRun(); return; }\n"
+        "  iframe.src = iframe.src.split('?')[0] + '?ts=' + Date.now();\n"
+        "}\n\n"
+        "function stopAll() {\n"
+        "  const iframe = document.getElementById('stage-iframe');\n"
+        "  if (!iframe) return;\n"
+        "  iframe.src = 'about:blank';\n"
+        "  iframe.style.display = 'none';\n"
+        "  document.getElementById('stage-placeholder').style.display = 'flex';\n"
+        "  document.getElementById('stage-label').textContent = 'Stopped';\n"
+        "  setStatus('stopped');\n"
+        "}\n\n";
+
+    size_t old_len = (size_t)(end - start);
+    size_t replacement_len = sizeof(replacement) - 1;
+    size_t new_len = len - old_len + replacement_len;
+    char *out = malloc(new_len + 1);
+    if (!out) { free(html); return NULL; }
+
+    size_t prefix = (size_t)(start - html);
+    memcpy(out, html, prefix);
+    memcpy(out + prefix, replacement, replacement_len);
+    memcpy(out + prefix + replacement_len, end, len - (size_t)(end - html));
+    out[new_len] = '\0';
+    free(html);
+    *out_len = new_len;
+    return out;
+}
 
 static void handle_static(int fd, const char *url) {
     char path[4096];
 
     if (!strcmp(url, "/") || !strcmp(url, "/index.html")) {
         size_t len = 0;
-        char *html = read_file_binary(g_ide_html, &len);
-        if (!html) {
+        char *body = build_ide_html(&len);
+        if (!body) {
             http_respond(fd, 404, "text/plain", "Not Found\n", 10);
             return;
         }
-
-        const char marker[] = "</body>";
-        size_t marker_len = sizeof(marker) - 1;
-        size_t off = len;
-        while (off >= marker_len) {
-            size_t pos = off - marker_len;
-            if (!memcmp(html + pos, marker, marker_len)) { off = pos; break; }
-            if (pos == 0) { off = len; break; }
-            off = pos;
-        }
-
-        if (off == len) {
-            http_respond(fd, 200, "text/html; charset=utf-8", html, len);
-            free(html);
-            return;
-        }
-
-        size_t controller_len = strlen(preview_controller);
-        size_t out_len = len + controller_len;
-        char *out = malloc(out_len);
-        if (!out) {
-            free(html);
-            http_respond(fd, 500, "text/plain", "Out of memory\n", 14);
-            return;
-        }
-        memcpy(out, html, off);
-        memcpy(out + off, preview_controller, controller_len);
-        memcpy(out + off + controller_len, html + off, len - off);
-        http_respond(fd, 200, "text/html; charset=utf-8", out, out_len);
-        free(out);
-        free(html);
+        http_respond(fd, 200, "text/html; charset=utf-8", body, len);
+        free(body);
         return;
     }
 
