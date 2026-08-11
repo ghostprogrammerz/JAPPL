@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JAPPL IDE</title>
+<style>
+  :root {
+    --bg:        #1a1a2e;
+    --panel:     #16213e;
+    --surface:   #0f3460;
+    --border:    #1e3a5f;
+    --accent:    #e94560;
+    --accent2:   #0f7c72;
+    --text:      #e8eaf6;
+    --text-dim:  #7986cb;
+    --green:     #4caf50;
+    --red:       #f44336;
+    --bar:       #0d1b2a;
+    --sprite-sel:#1a3a5c;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --font-ui:   'Inter', system-ui, sans-serif;
+    --radius:    6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 13px; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    height: 42px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 10px;
+    z-index: 100;
+  }
+  #topbar .logo {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-right: 8px;
+  }
+  #topbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border-radius: var(--radius);
+    border: none; cursor: pointer; font-size: 12px; font-family: var(--font-ui);
+    font-weight: 600; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #c73652; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn svg { width: 13px; height: 13px; }
+  #topbar .spacer { flex: 1; }
+  #compile-status {
+    font-size: 11px; color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  #compile-status.ok  { color: var(--green); }
+  #compile-status.err { color: var(--red); }
+
+  /* ── MAIN LAYOUT ── */
+  #main {
+    display: grid;
+    grid-template-columns: 260px 1fr 340px;
+    grid-template-rows: 1fr;
+    height: calc(100vh - 42px);
+    overflow: hidden;
+  }
+
+  /* ── LEFT PANEL (docs iframe) ── */
+  #left-panel {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #left-panel .panel-header {
+    height: 32px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  #left-panel .panel-header svg { width: 12px; height: 12px; }
+  #docs-url-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  #docs-url-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 3px 7px;
+    outline: none;
+  }
+  #docs-url-input:focus { border-color: var(--accent); }
+  #docs-go { padding: 3px 8px; font-size: 11px; }
+  #docs-iframe {
+    flex: 1;
+    border: none;
+    background: #fff;
+  }
+
+  /* ── CENTER PANEL (editor) ── */
+  #center-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  #sprite-tabs-bar {
+    display: flex;
+    align-items: center;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+    height: 36px;
+    padding: 0 6px;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  #sprite-tabs-bar::-webkit-scrollbar { display: none; }
+  .sprite-tab {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 12px; height: 28px; border-radius: 4px;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    white-space: nowrap; color: var(--text-dim);
+    border: 1px solid transparent;
+    transition: all 0.12s;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .sprite-tab:hover { background: var(--panel); color: var(--text); }
+  .sprite-tab.active {
+    background: var(--sprite-sel);
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .sprite-tab .tab-close {
+    width: 14px; height: 14px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--text-dim);
+    cursor: pointer; margin-left: 2px;
+  }
+  .sprite-tab .tab-close:hover { background: var(--accent); color: #fff; }
+  #add-sprite-tab {
+    width: 28px; height: 28px; border-radius: 4px;
+    background: none; border: 1px dashed var(--border);
+    color: var(--text-dim); cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-left: 4px;
+    transition: all 0.12s;
+  }
+  #add-sprite-tab:hover { border-color: var(--accent); color: var(--accent); }
+
+  #editor-wrapper { flex: 1; overflow: hidden; position: relative; }
+  #monaco-editor { width: 100%; height: 100%; }
+
+  /* error gutter overlay */
+  #error-bar {
+    background: #1a0a0a;
+    border-top: 1px solid #4a1515;
+    color: var(--red);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    max-height: 80px;
+    overflow-y: auto;
+    display: none;
+    flex-shrink: 0;
+  }
+  #error-bar.visible { display: block; }
+  #error-bar .err-line { padding: 1px 0; }
+
+  /* ── RIGHT PANEL ── */
+  #right-panel {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  /* Stage */
+  #stage-section {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--border);
+  }
+  #stage-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stage-btn {
+    width: 28px; height: 28px; border-radius: 4px;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s;
+  }
+  #btn-green-flag { background: var(--green); }
+  #btn-green-flag:hover { background: #388e3c; }
+  #btn-stop       { background: var(--red); }
+  #btn-stop:hover { background: #c62828; }
+  #btn-fullscreen { background: var(--surface); margin-left: auto; }
+  #btn-fullscreen:hover { background: var(--border); }
+  .stage-btn svg { width: 14px; height: 14px; fill: #fff; }
+
+  #stage-container {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+  }
+  #tw-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+  #stage-placeholder {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; color: var(--text-dim);
+    font-size: 12px;
+  }
+  #stage-placeholder svg { width: 40px; height: 40px; opacity: 0.3; }
+  #stage-placeholder p { opacity: 0.5; }
+
+  /* Sprite list */
+  #sprites-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #sprites-header {
+    height: 32px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px;
+    flex-shrink: 0;
+  }
+  #sprites-header span {
+    font-size: 11px; font-weight: 600;
+    color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  #sprites-header button {
+    background: none; border: none; cursor: pointer; color: var(--text-dim);
+    font-size: 18px; line-height: 1; padding: 0 2px;
+    transition: color 0.12s;
+  }
+  #sprites-header button:hover { color: var(--accent); }
+
+  #sprites-grid {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 8px;
+    padding: 10px;
+    overflow-y: auto;
+  }
+  #sprites-grid::-webkit-scrollbar { width: 4px; }
+  #sprites-grid::-webkit-scrollbar-track { background: transparent; }
+  #sprites-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .sprite-card {
+    width: 70px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 4px; border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    cursor: pointer;
+    transition: all 0.12s;
+    position: relative;
+  }
+  .sprite-card:hover { border-color: var(--accent2); }
+  .sprite-card.active { border-color: var(--accent); background: var(--sprite-sel); }
+  .sprite-thumb {
+    width: 44px; height: 44px;
+    border-radius: 4px;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    overflow: hidden;
+  }
+  .sprite-name {
+    font-size: 10px; color: var(--text-dim);
+    text-align: center; width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 0 2px;
+  }
+  .sprite-card.active .sprite-name { color: var(--text); }
+  .sprite-actions {
+    position: absolute; top: 3px; right: 3px;
+    display: none; gap: 3px;
+  }
+  .sprite-card:hover .sprite-actions { display: flex; }
+  .sprite-action-btn {
+    width: 16px; height: 16px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: none; padding: 0;
+  }
+  .sprite-action-btn.rename { background: var(--accent2); }
+  .sprite-action-btn.delete { background: var(--accent); }
+  .sprite-action-btn svg { width: 9px; height: 9px; fill: #fff; }
+
+  /* Add sprite card */
+  .sprite-card.add-card {
+    border-style: dashed; background: none;
+    color: var(--text-dim); font-size: 22px;
+    justify-content: center;
+  }
+  .sprite-card.add-card:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ── MODALS / OVERLAYS ── */
+  #rename-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.6);
+    align-items: center; justify-content: center;
+  }
+  #rename-modal.open { display: flex; }
+  .modal-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    width: 300px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .modal-box h3 { font-size: 14px; font-weight: 600; }
+  .modal-box input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none; width: 100%;
+    font-family: var(--font-ui);
+  }
+  .modal-box input:focus { border-color: var(--accent); }
+  .modal-box .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ── COSTUME MODAL ── */
+  #costume-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.65);
+    align-items: center; justify-content: center;
+  }
+  #costume-modal.open { display: flex; }
+  .costume-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 420px;
+    max-height: 70vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .costume-box-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .costume-box-header h3 { font-size: 14px; font-weight: 600; }
+  .costume-box-header .close-btn {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 18px; line-height: 1;
+    padding: 0 2px;
+  }
+  .costume-box-header .close-btn:hover { color: var(--accent); }
+  #costume-list {
+    flex: 1; overflow-y: auto;
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .costume-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .costume-item .costume-preview {
+    width: 40px; height: 40px; border-radius: 4px;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--text-dim);
+    overflow: hidden; flex-shrink: 0;
+  }
+  .costume-item .costume-preview img { width: 100%; height: 100%; object-fit: contain; }
+  .costume-item .costume-info { flex: 1; min-width: 0; }
+  .costume-item .costume-name {
+    font-size: 12px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .costume-item .costume-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .costume-item .costume-del {
+    width: 22px; height: 22px; border-radius: 4px;
+    background: none; border: 1px solid var(--border);
+    color: var(--text-dim); cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.1s;
+  }
+  .costume-item .costume-del:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .costume-empty {
+    text-align: center; color: var(--text-dim); font-size: 12px;
+    padding: 20px; opacity: 0.6;
+  }
+  .costume-footer {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center;
+    flex-shrink: 0;
+  }
+  #costume-drop-zone {
+    flex: 1; border: 1px dashed var(--border); border-radius: 6px;
+    padding: 8px 12px; text-align: center;
+    color: var(--text-dim); font-size: 11px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  #costume-drop-zone:hover, #costume-drop-zone.drag-over {
+    border-color: var(--accent2); color: var(--accent2);
+    background: rgba(15,124,114,0.08);
+  }
+  #costume-file-input { display: none; }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">JAPPL</div>
+  <div class="sep"></div>
+  <button class="btn btn-primary" id="btn-compile" onclick="compileAndRun()">
+    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 6-10 6V2z"/></svg>
+    Compile &amp; Run
+  </button>
+  <button class="btn btn-secondary" id="btn-compile-only" onclick="compileOnly()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,8 8,12 12,4"/></svg>
+    Compile
+  </button>
+  <button class="btn btn-secondary" onclick="downloadSb3()" id="btn-download" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v7M5 8l3 3 3-3M3 13h10"/></svg>
+    .sb3
+  </button>
+  <div class="sep"></div>
+  <span id="compile-status">ready</span>
+  <div class="spacer"></div>
+  <span style="font-size:11px;color:var(--text-dim);font-family:var(--font-mono)">jappl2sb3 backend: </span>
+  <input id="backend-url" value="http://localhost:8765" style="
+    background:var(--panel);border:1px solid var(--border);border-radius:4px;
+    color:var(--text);font-size:11px;font-family:var(--font-mono);
+    padding:3px 7px;outline:none;width:180px;
+  ">
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT: DOCS -->
+  <div id="left-panel">
+    <div class="panel-header">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="1" width="10" height="10" rx="1"/>
+        <line x1="3" y1="4" x2="9" y2="4"/>
+        <line x1="3" y1="6.5" x2="9" y2="6.5"/>
+        <line x1="3" y1="9" x2="7" y2="9"/>
+      </svg>
+      Docs
+    </div>
+    <div id="docs-url-bar">
+      <input id="docs-url-input" type="text" value="https://ghostprogrammerz.github.io/JAPPL/" placeholder="URL">
+      <button class="btn btn-secondary" id="docs-go" onclick="loadDocs()">Go</button>
+    </div>
+    <iframe id="docs-iframe" src="https://ghostprogrammerz.github.io/JAPPL/" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  </div>
+
+  <!-- CENTER: EDITOR -->
+  <div id="center-panel">
+    <div id="sprite-tabs-bar">
+      <!-- tabs injected here -->
+      <button id="add-sprite-tab" title="Add sprite" onclick="addSprite()">+</button>
+    </div>
+    <div id="editor-wrapper">
+      <div id="monaco-editor"></div>
+    </div>
+    <div id="error-bar"></div>
+  </div>
+
+  <!-- RIGHT: STAGE + SPRITES -->
+  <div id="right-panel">
+    <div id="stage-section">
+      <div id="stage-controls">
+        <button class="stage-btn" id="btn-green-flag" title="Green Flag" onclick="greenFlag()">
+          <svg viewBox="0 0 14 14"><path d="M3 2l8 5-8 5V2z"/></svg>
+        </button>
+        <button class="stage-btn" id="btn-stop" title="Stop" onclick="stopAll()">
+          <svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="1"/></svg>
+        </button>
+        <span style="font-size:10px;color:var(--text-dim);margin-left:4px" id="stage-label">No project loaded</span>
+        <button class="stage-btn" id="btn-fullscreen" title="Fullscreen" onclick="fullscreen()">
+          <svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.4">
+            <polyline points="2,5 2,2 5,2"/><polyline points="9,2 12,2 12,5"/>
+            <polyline points="12,9 12,12 9,12"/><polyline points="5,12 2,12 2,9"/>
+          </svg>
+        </button>
+      </div>
+      <div id="stage-container" style="height:255px">
+        <div id="stage-placeholder">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="4" y="8" width="40" height="32" rx="3"/>
+            <path d="M18 22l8 6-8 6V22z"/>
+          </svg>
+          <p>Compile to see your project</p>
+        </div>
+        <iframe id="tw-iframe" style="display:none" allow="autoplay; fullscreen"
+          sandbox="allow-scripts allow-same-origin allow-modals"></iframe>
+      </div>
+    </div>
+
+    <div id="sprites-section">
+      <div id="sprites-header">
+        <span>Sprites</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button title="Edit costumes for active sprite" onclick="openCostumeModal(activeId)"
+            style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:0.3px;padding:2px 6px;border-radius:3px;border:1px solid var(--border)">
+            Costumes
+          </button>
+          <button title="Add sprite" onclick="addSprite()" style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:18px;line-height:1;padding:0 2px;transition:color 0.12s;">+</button>
+        </div>
+      </div>
+      <div id="sprites-grid">
+        <!-- sprite cards injected -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COSTUME MODAL -->
+<div id="costume-modal">
+  <div class="costume-box">
+    <div class="costume-box-header">
+      <h3 id="costume-modal-title">Costumes — Sprite1</h3>
+      <button class="close-btn" onclick="closeCostumeModal()">×</button>
+    </div>
+    <div id="costume-list"></div>
+    <div class="costume-footer">
+      <div id="costume-drop-zone" onclick="document.getElementById('costume-file-input').click()"
+           ondragover="e=>{ e.preventDefault(); this.classList.add('drag-over'); }"
+           ondragleave="e=>{ this.classList.remove('drag-over'); }"
+           ondrop="handleCostumeDrop(event)">
+        Click or drag image files to add costumes (.svg, .png, .jpg, .gif)
+      </div>
+      <input type="file" id="costume-file-input" multiple accept=".svg,.png,.jpg,.jpeg,.gif"
+             onchange="handleCostumeFileInput(this)">
+    </div>
+  </div>
+</div>
+
+<!-- RENAME MODAL -->
+<div id="rename-modal">
+  <div class="modal-box">
+    <h3>Rename Sprite</h3>
+    <input id="rename-input" placeholder="Sprite name" autocomplete="off"
+      onkeydown="if(event.key==='Enter')confirmRename();if(event.key==='Escape')closeRenameModal();">
+    <div class="modal-btns">
+      <button class="btn btn-secondary" onclick="closeRenameModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- MONACO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const EMOJIS = ['🐱','🐶','🦊','🐸','🐼','🦁','🐯','🦋','🐙','🦄'];
+let sprites = [
+  { id: 1, name: 'Sprite1', emoji: '🐱', code: '    when (green flag)\n    {\n        say (Hello World!) for (2) seconds\n    }\n' }
+];
+let activeId = 1;
+let nextId = 2;
+let editor = null;
+let sb3Blob = null;
+let renameTargetId = null;
+let dirty = false;
+
+// ─────────────────────────────────────────────
+// MONACO SETUP
+// ─────────────────────────────────────────────
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs' } });
+require(['vs/editor/editor.main'], function() {
+
+  // JAPPL language definition
+  monaco.languages.register({ id: 'jappl' });
+  monaco.languages.setMonarchTokensProvider('jappl', {
+    keywords: ['when','repeat','forever','if','else','var','list','sprite','stage','not','and','or','mod','to','of','by','for','at','with','steps','degrees','seconds','secs','contains','define','custom block'],
+    tokenizer: {
+      root: [
+        [/#.*$/, 'comment'],
+        [/"([^"\\]|\\.)*"/, 'string'],
+        [/\b(when|repeat|forever|if|else|var|list|sprite|stage|not|and|or|mod|to|of|by|for|at|with|steps|degrees|seconds|secs|contains|define|custom block)\b/, 'keyword'],
+        [/\b(green flag|key pressed|backdrop switches|clone starts|broadcast|I receive)\b/, 'keyword.control'],
+        [/\b(set variable|change variable|delete all of list|add|replace item|item|length of list|show list|hide list)\b/, 'type.identifier'],
+        [/\b(say|think|ask|wait|move|turn|go to|glide|point|set x|set y|change x|change y|if on edge bounce|play sound|stop sound|broadcast and wait|stop all|stop this script|stop other scripts|create clone|delete this clone|show|hide|set size|change size|set effect|change effect|clear effects|next costume|switch costume|next backdrop|switch backdrop|stamp|pen down|pen up|set pen color|change pen size|erase all)\b/, 'support.function'],
+        [/\b(exp|log|sqrt|sin|cos|tan|asin|acos|atan|abs|floor|ceiling|round)\b/, 'support.function'],
+        [/[0-9]+(\.[0-9]+)?/, 'number'],
+        [/[(){}]/, 'delimiter'],
+        [/[+\-*\/=<>!]/, 'operator'],
+      ]
+    }
+  });
+
+  monaco.languages.setLanguageConfiguration('jappl', {
+    comments: { lineComment: '#' },
+    brackets: [['(',')'],['{','}']],
+    autoClosingPairs: [
+      { open: '(', close: ')' },
+      { open: '{', close: '}' },
+    ],
+  });
+
+  monaco.editor.defineTheme('jappl-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment',          foreground: '546e7a', fontStyle: 'italic' },
+      { token: 'string',           foreground: 'a5d6a7' },
+      { token: 'keyword',          foreground: 'e94560', fontStyle: 'bold' },
+      { token: 'keyword.control',  foreground: 'ef9a9a' },
+      { token: 'type.identifier',  foreground: '80cbc4' },
+      { token: 'support.function', foreground: 'ce93d8' },
+      { token: 'number',           foreground: 'ffcc80' },
+      { token: 'delimiter',        foreground: '78909c' },
+      { token: 'operator',         foreground: 'b0bec5' },
+    ],
+    colors: {
+      'editor.background':          '#0d1b2a',
+      'editor.foreground':          '#e8eaf6',
+      'editor.lineHighlightBackground': '#16213e',
+      'editorLineNumber.foreground':    '#374d6a',
+      'editorLineNumber.activeForeground': '#7986cb',
+      'editor.selectionBackground': '#1e3a5f',
+      'editorCursor.foreground':    '#e94560',
+      'editorIndentGuide.background1': '#1e2d40',
+      'scrollbar.shadow':           '#00000000',
+      'scrollbarSlider.background': '#1e3a5f80',
+    }
+  });
+
+  editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+    value: sprites[0].code,
+    language: 'jappl',
+    theme: 'jappl-dark',
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: 13,
+    lineHeight: 22,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    renderLineHighlight: 'gutter',
+    padding: { top: 12 },
+    wordWrap: 'off',
+    automaticLayout: true,
+    tabSize: 4,
+    insertSpaces: true,
+    bracketPairColorization: { enabled: false },
+    guides: { indentation: true },
+    renderWhitespace: 'none',
+    smoothScrolling: true,
+    cursorBlinking: 'smooth',
+    cursorSmoothCaretAnimation: 'on',
+  });
+
+  let suppressChange = false;
+  editor.onDidChangeModelContent(() => {
+    if (suppressChange) return;
+    const sp = sprites.find(s => s.id === activeId);
+    if (sp) sp.code = editor.getValue();
+    dirty = true;
+    setStatus('ready');
+  });
+
+  window._editorSetValue = function(code) {
+    suppressChange = true;
+    editor.setValue(code);
+    suppressChange = false;
+  };
+
+  renderTabs();
+  renderSpriteGrid();
+});
+
+// ─────────────────────────────────────────────
+// TABS & SPRITES
+// ─────────────────────────────────────────────
+function renderTabs() {
+  const bar = document.getElementById('sprite-tabs-bar');
+  const addBtn = document.getElementById('add-sprite-tab');
+  // clear existing tabs
+  [...bar.querySelectorAll('.sprite-tab')].forEach(t => t.remove());
+
+  sprites.forEach(sp => {
+    const tab = document.createElement('div');
+    tab.className = 'sprite-tab' + (sp.id === activeId ? ' active' : '');
+    tab.dataset.id = sp.id;
+    tab.innerHTML = `<span>${sp.emoji}</span><span>${sp.name}</span><span class="tab-close" data-id="${sp.id}">×</span>`;
+    tab.onclick = (e) => {
+      if (e.target.classList.contains('tab-close')) return;
+      switchSprite(sp.id);
+    };
+    tab.querySelector('.tab-close').onclick = () => removeSprite(sp.id);
+    bar.insertBefore(tab, addBtn);
+  });
+}
+
+function renderSpriteGrid() {
+  const grid = document.getElementById('sprites-grid');
+  grid.innerHTML = '';
+  sprites.forEach(sp => {
+    const card = document.createElement('div');
+    card.className = 'sprite-card' + (sp.id === activeId ? ' active' : '');
+    const costumeCount = sp.costumes ? sp.costumes.length : 0;
+    card.innerHTML = `
+      <div class="sprite-thumb">${sp.emoji}</div>
+      <div class="sprite-name">${sp.name}</div>
+      <div class="sprite-actions">
+        <button class="sprite-action-btn rename" title="Rename sprite">
+          <svg viewBox="0 0 10 10"><path d="M1 7.5L1 9h1.5l4.3-4.3-1.5-1.5L1 7.5zm7-4.1c.2-.2.2-.4 0-.6L6.7 1.5c-.2-.2-.4-.2-.6 0l-.9.9 1.5 1.5.9-.9z"/></svg>
+        </button>
+        <button class="sprite-action-btn delete" title="Delete sprite">
+          <svg viewBox="0 0 10 10"><path d="M1.5 2.5h7M4 1h2M3 2.5v6h4v-6M4.5 4v3M5.5 4v3"/></svg>
+        </button>
+      </div>
+    `;
+    card.onclick = (e) => {
+      if (e.target.closest('.sprite-actions')) return;
+      switchSprite(sp.id);
+    };
+    card.querySelector('.sprite-action-btn.rename').onclick = (e) => { e.stopPropagation(); openRenameModal(sp.id); };
+    card.querySelector('.sprite-action-btn.delete').onclick = (e) => { e.stopPropagation(); removeSprite(sp.id); };
+    grid.appendChild(card);
+  });
+  // add card
+  const add = document.createElement('div');
+  add.className = 'sprite-card add-card';
+  add.textContent = '+';
+  add.title = 'Add sprite';
+  add.onclick = addSprite;
+  grid.appendChild(add);
+}
+
+function saveActive() {
+  if (!editor) return;
+  const sp = sprites.find(s => s.id === activeId);
+  if (sp) sp.code = editor.getValue();
+}
+
+function switchSprite(id) {
+  saveActive();
+  activeId = id;
+  const sp = sprites.find(s => s.id === id);
+  if (!sp) return;
+  if (window._editorSetValue) window._editorSetValue(sp.code);
+  else if (editor) editor.setValue(sp.code);
+  renderTabs();
+  renderSpriteGrid();
+}
+
+function addSprite() {
+  saveActive();
+  const id = nextId++;
+  const emoji = EMOJIS[(id - 1) % EMOJIS.length];
+  const name = `Sprite${id}`;
+  sprites.push({ id, name, emoji, code: `    when (green flag)\n    {\n    }\n` });
+  activeId = id;
+  if (window._editorSetValue) window._editorSetValue(sprites[sprites.length-1].code);
+  else if (editor) editor.setValue(sprites[sprites.length-1].code);
+  renderTabs();
+  renderSpriteGrid();
+}
+
+function removeSprite(id) {
+  if (sprites.length === 1) return;
+  saveActive();
+  sprites = sprites.filter(s => s.id !== id);
+  if (activeId === id) {
+    activeId = sprites[sprites.length - 1].id;
+    const sp = sprites.find(s => s.id === activeId);
+    if (window._editorSetValue) window._editorSetValue(sp.code);
+    else if (editor) editor.setValue(sp.code);
+  }
+  renderTabs();
+  renderSpriteGrid();
+}
+
+// ─────────────────────────────────────────────
+// COSTUME MODAL
+// ─────────────────────────────────────────────
+let costumeTargetId = null;
+
+function openCostumeModal(id) {
+  costumeTargetId = id;
+  const sp = sprites.find(s => s.id === id);
+  if (!sp) return;
+  if (!sp.costumes) sp.costumes = [];
+  document.getElementById('costume-modal-title').textContent = `Costumes — ${sp.name}`;
+  renderCostumeList(sp);
+  document.getElementById('costume-modal').classList.add('open');
+}
+
+function closeCostumeModal() {
+  document.getElementById('costume-modal').classList.remove('open');
+  costumeTargetId = null;
+}
+
+function renderCostumeList(sp) {
+  const list = document.getElementById('costume-list');
+  if (!sp.costumes || sp.costumes.length === 0) {
+    list.innerHTML = '<div class="costume-empty">No costumes yet.<br>Add images below — first costume becomes the default.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  sp.costumes.forEach((c, i) => {
+    const item = document.createElement('div');
+    item.className = 'costume-item';
+    item.innerHTML = `
+      <div class="costume-preview">
+        <img src="${c.dataUrl}" alt="${c.name}">
+      </div>
+      <div class="costume-info">
+        <div class="costume-name">${c.name}</div>
+        <div class="costume-meta">${c.type} · costume ${i + 1}</div>
+      </div>
+      <button class="costume-del" title="Remove costume" onclick="removeCostume(${i})">×</button>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function removeCostume(index) {
+  const sp = sprites.find(s => s.id === costumeTargetId);
+  if (!sp) return;
+  sp.costumes.splice(index, 1);
+  renderCostumeList(sp);
+}
+
+function handleCostumeFileInput(input) {
+  addCostumeFiles(Array.from(input.files));
+  input.value = '';
+}
+
+function handleCostumeDrop(e) {
+  e.preventDefault();
+  document.getElementById('costume-drop-zone').classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+  addCostumeFiles(files);
+}
+
+function addCostumeFiles(files) {
+  const sp = sprites.find(s => s.id === costumeTargetId);
+  if (!sp) return;
+  if (!sp.costumes) sp.costumes = [];
+  let pending = files.length;
+  if (!pending) return;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      sp.costumes.push({
+        name: file.name.replace(/\.[^.]+$/, ''),
+        dataUrl: e.target.result,
+        type: file.type,
+        filename: file.name,
+      });
+      pending--;
+      if (pending === 0) renderCostumeList(sp);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('costume-modal').onclick = function(e) {
+  if (e.target === this) closeCostumeModal();
+};
+
+// drag-over highlight
+document.getElementById('costume-drop-zone').addEventListener('dragover', e => {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+});
+document.getElementById('costume-drop-zone').addEventListener('dragleave', e => {
+  e.currentTarget.classList.remove('drag-over');
+});
+
+// ─────────────────────────────────────────────
+// RENAME MODAL
+// ─────────────────────────────────────────────
+function openRenameModal(id) {
+  renameTargetId = id;
+  const sp = sprites.find(s => s.id === id);
+  document.getElementById('rename-input').value = sp.name;
+  document.getElementById('rename-modal').classList.add('open');
+  setTimeout(() => document.getElementById('rename-input').select(), 50);
+}
+function closeRenameModal() {
+  document.getElementById('rename-modal').classList.remove('open');
+  renameTargetId = null;
+}
+function confirmRename() {
+  const val = document.getElementById('rename-input').value.trim();
+  if (!val) { document.getElementById('rename-input').focus(); return; }
+  const sp = sprites.find(s => s.id === renameTargetId);
+  if (sp) sp.name = val;
+  closeRenameModal();
+  renderTabs();
+  renderSpriteGrid();
+}
+document.getElementById('rename-modal').onclick = function(e) {
+  if (e.target === this) closeRenameModal();
+};
+
+// ─────────────────────────────────────────────
+// DOCS
+// ─────────────────────────────────────────────
+function loadDocs() {
+  const url = document.getElementById('docs-url-input').value.trim();
+  if (url) document.getElementById('docs-iframe').src = url;
+}
+document.getElementById('docs-url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadDocs();
+});
+
+// ─────────────────────────────────────────────
+// COMPILE
+// ─────────────────────────────────────────────
+function buildJapplSource() {
+  saveActive();
+
+  // build global vars/lists from first sprite or a dedicated stage block
+  // For now: wrap each sprite's code in sprite (Name) { ... }
+  return sprites.map(sp => {
+    return `sprite (${sp.name})\n{\n${sp.code}\n}`;
+  }).join('\n\n');
+}
+
+function setStatus(msg, cls='') {
+  const el = document.getElementById('compile-status');
+  el.textContent = msg;
+  el.className = cls;
+}
+
+function showErrors(errors) {
+  const bar = document.getElementById('error-bar');
+  if (!errors || errors.length === 0) {
+    bar.classList.remove('visible');
+    bar.innerHTML = '';
+    return;
+  }
+  bar.classList.add('visible');
+  bar.innerHTML = errors.map(e => `<div class="err-line">⚠ ${e}</div>`).join('');
+}
+
+async function compileOnly() {
+  setStatus('compiling…', '');
+  showErrors([]);
+  const src = buildJapplSource();
+  const backendUrl = document.getElementById('backend-url').value.trim();
+
+  try {
+    const res = await fetch(`${backendUrl}/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: src,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      const errs = text.split('\n').filter(Boolean);
+      showErrors(errs);
+      setStatus(`${errs.length} error(s)`, 'err');
+      sb3Blob = null;
+      document.getElementById('btn-download').style.display = 'none';
+      return null;
+    }
+
+    const blob = await res.blob();
+    sb3Blob = blob;
+    dirty = false;
+    setStatus('compiled ✓', 'ok');
+    document.getElementById('btn-download').style.display = '';
+    return blob;
+  } catch(e) {
+    setStatus('backend unreachable', 'err');
+    showErrors([`Cannot connect to ${backendUrl}`, 'Is the jappl2sb3 server running?']);
+    return null;
+  }
+}
+
+async function compileAndRun() {
+  const blob = await compileOnly();
+  if (!blob) return;
+  loadIntoTurboWarp(blob);
+}
+
+function loadIntoTurboWarp(blob) {
+  const url = URL.createObjectURL(blob);
+  document.getElementById('stage-label').textContent = 'Running…';
+  document.getElementById('stage-placeholder').style.display = 'none';
+
+  const iframe = document.getElementById('tw-iframe');
+  iframe.style.display = 'block';
+
+  // TurboWarp embed — load project from URL
+  const twUrl = `https://turbowarp.org/editor?project_url=${encodeURIComponent(url)}`;
+  iframe.src = twUrl;
+
+  iframe.onload = () => {
+    document.getElementById('stage-label').textContent = 'Loaded';
+  };
+}
+
+function downloadSb3() {
+  if (!sb3Blob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(sb3Blob);
+  a.download = 'project.sb3';
+  a.click();
+}
+
+// ─────────────────────────────────────────────
+// STAGE CONTROLS
+// ─────────────────────────────────────────────
+function greenFlag() {
+  const iframe = document.getElementById('tw-iframe');
+  if (iframe.style.display === 'none') { compileAndRun(); return; }
+  try { iframe.contentWindow.postMessage({ type: 'green-flag' }, '*'); }
+  catch(e) { /* cross-origin, just reload */ compileAndRun(); }
+}
+
+function stopAll() {
+  const iframe = document.getElementById('tw-iframe');
+  try { iframe.contentWindow.postMessage({ type: 'stop' }, '*'); }
+  catch(e) {}
+}
+
+function fullscreen() {
+  const container = document.getElementById('stage-container');
+  if (container.requestFullscreen) container.requestFullscreen();
+}
+
+// ─────────────────────────────────────────────
+// RESIZE: make stage square-ish based on panel width
+// ─────────────────────────────────────────────
+function updateStageSize() {
+  const panel = document.getElementById('right-panel');
+  const w = panel.offsetWidth;
+  const h = Math.round(w * 0.75); // 4:3
+  document.getElementById('stage-container').style.height = Math.min(h, 280) + 'px';
+}
+window.addEventListener('resize', updateStageSize);
+updateStageSize();
+
+// keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault(); compileAndRun();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
+    e.preventDefault(); compileOnly();
+  }
+});
+</script>
+</body>
+</html>
