@@ -483,8 +483,17 @@ int main(int argc, char **argv) {
     }
     if (listen(server, 16) < 0) { perror("listen"); return 1; }
 
-    printf("jappl2sb3 server listening on http://0.0.0.0:%d\n", port);
+    printf("jappl2sb3 server listening on http://localhost:%d\n", port);
     fflush(stdout);
+
+    /* open browser unless NO_BROWSER=1 */
+    if (!getenv("NO_BROWSER")) {
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd),
+                 "xdg-open 'http://localhost:%d' >/dev/null 2>&1 &", port);
+        system(cmd);
+    }
+
     for (;;) {
         struct sockaddr_in client;
         socklen_t client_len = sizeof(client);
