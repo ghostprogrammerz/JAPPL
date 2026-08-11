@@ -186,14 +186,17 @@ static void handle_static(int fd, const char *url_path) {
 
     if (strcmp(url_path, "/") == 0 || strcmp(url_path, "/index.html") == 0) {
         snprintf(disk_path, sizeof(disk_path), "%s", g_ide_html);
-    } else if (strncmp(url_path, "/static/", 8) == 0) {
-        /* strip leading /static/ and reject any .. traversal */
-        const char *file = url_path + 8;
-        if (strstr(file, "..") || strchr(file, '/')) {
+    } else if (strncmp(url_path, "/static/", 8) == 0 ||
+               strncmp(url_path, "/chunks/", 8) == 0) {
+        /* strip leading slash+dir and reject any .. traversal */
+        const char *slash2 = strchr(url_path + 1, '/');
+        const char *file = slash2 ? slash2 + 1 : NULL;
+        const char *subdir = (url_path[1] == 's') ? "static" : "chunks";
+        if (!file || strstr(file, "..") || strchr(file, '/')) {
             http_respond(fd, 403, "text/plain", "Forbidden\n", 10);
             return;
         }
-        snprintf(disk_path, sizeof(disk_path), "%s/%s", g_static_dir, file);
+        snprintf(disk_path, sizeof(disk_path), "%s/../%s/%s", g_static_dir, subdir, file);
     } else {
         http_respond(fd, 404, "text/plain", "Not Found\n", 10);
         return;
@@ -266,7 +269,8 @@ static void handle_connection(int fd) {
 
     if (strcmp(req.path, "/") == 0 ||
         strcmp(req.path, "/index.html") == 0 ||
-        strncmp(req.path, "/static/", 8) == 0) {
+        strncmp(req.path, "/static/", 8) == 0 ||
+        strncmp(req.path, "/chunks/", 8) == 0) {
         handle_static(fd, req.path);
         goto done;
     }

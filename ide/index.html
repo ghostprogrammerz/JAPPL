@@ -1094,6 +1094,11 @@ async function initScratch(canvas) {
   const renderer = new Renderer(canvas);
   vm.attachRenderer(renderer);
 
+  // attach bitmap adapter (bundled in scratch-render)
+  if (window.ScratchRender.BitmapAdapter) {
+    vm.attachV2BitmapAdapter(new window.ScratchRender.BitmapAdapter());
+  }
+
   const storage = new Storage();
   const AssetType = window.ScratchStorage.AssetType;
   storage.addWebStore(
