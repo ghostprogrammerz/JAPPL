@@ -907,14 +907,28 @@ function addCostumeFiles(files) {
   files.forEach(file => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      sp.costumes.push({
+      const costume = {
         name: file.name.replace(/\.[^.]+$/, ''),
         dataUrl: e.target.result,
         type: file.type,
         filename: file.name,
-      });
-      pending--;
-      if (pending === 0) renderCostumeList(sp);
+        width: 0,
+        height: 0,
+      };
+      const img = new Image();
+      img.onload = () => {
+        costume.width = img.naturalWidth || img.width || 0;
+        costume.height = img.naturalHeight || img.height || 0;
+        sp.costumes.push(costume);
+        pending--;
+        if (pending === 0) renderCostumeList(sp);
+      };
+      img.onerror = () => {
+        sp.costumes.push(costume);
+        pending--;
+        if (pending === 0) renderCostumeList(sp);
+      };
+      img.src = costume.dataUrl;
     };
     reader.readAsDataURL(file);
   });
@@ -1007,11 +1021,28 @@ async function compileOnly() {
   const src = buildJapplSource();
   const backendUrl = document.getElementById('backend-url').value.trim();
 
+  /* Costume files are IDE assets rather than JAPPL source. Send their data
+     to the compiler in an optional metadata section. */
+  const costumeMeta = sprites.map(sp => ({
+    sprite: sp.name,
+    costumes: (sp.costumes || []).map(c => ({
+      name: c.name,
+      dataUrl: c.dataUrl,
+      type: c.type || '',
+      filename: c.filename || '',
+      width: c.width || 0,
+      height: c.height || 0
+    }))
+  })).filter(x => x.costumes.length);
+  const requestBody = costumeMeta.length
+    ? src + '\n--JAPPL-COSTUMES--\n' + JSON.stringify(costumeMeta)
+    : src;
+
   try {
     const res = await fetch(`${backendUrl}/compile`, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: src,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      body: requestBody,
     });
 
     if (!res.ok) {

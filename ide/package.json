@@ -2,6 +2,7 @@
   "name": "jappl-ide-runtime",
   "private": true,
   "dependencies": {
-    "@turbowarp/packager": "3.13.0"
+    "@turbowarp/packager": "3.13.0",
+    "jszip": "^3.10.1"
   }
 }

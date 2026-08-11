@@ -14,7 +14,7 @@
 #include "emitter.h"
 
 #define DEFAULT_PORT 8765
-#define MAX_REQUEST (4 * 1024 * 1024)
+#define MAX_REQUEST (32 * 1024 * 1024)
 #define TMPDIR "/tmp"
 
 static char g_static_dir[4096];
@@ -306,23 +306,70 @@ static int package_sb3(const char *sb3, char **out, size_t *out_len) {
 }
 
 static void handle_compile(int fd, const char *src, size_t src_len) {
-    (void)src_len;
+    /* Optional IDE costume metadata follows this delimiter. It is deliberately
+       kept outside JAPPL source so the normal parser remains unchanged. */
+    static const char marker[] = "\n--JAPPL-COSTUMES--\n";
+    const char *meta = strstr(src, marker);
+    size_t source_len = meta ? (size_t)(meta - src) : src_len;
+    char *source = malloc(source_len + 1);
+    if (!source) {
+        http_respond(fd, 500, "text/plain", "Out of memory\n", 14);
+        return;
+    }
+    memcpy(source, src, source_len);
+    source[source_len] = '\0';
+
+    char meta_path[128] = {0};
+    if (meta) {
+        snprintf(meta_path, sizeof(meta_path), TMPDIR "/jappl_%d_costumes.json", (int)getpid());
+        FILE *mf = fopen(meta_path, "wb");
+        size_t meta_len = src_len - source_len - strlen(marker);
+        if (!mf || fwrite(meta + strlen(marker), 1, meta_len, mf) != meta_len) {
+            if (mf) fclose(mf);
+            free(source);
+            unlink(meta_path);
+            http_respond(fd, 400, "text/plain", "Invalid costume metadata\n", 26);
+            return;
+        }
+        fclose(mf);
+    }
+
     char tmp[128];
     snprintf(tmp, sizeof(tmp), TMPDIR "/jappl_%d.sb3", (int)getpid());
 
     Parser parser;
-    parser_init(&parser, src);
+    parser_init(&parser, source);
     Program *program = parser_parse(&parser);
     if (parser.errors > 0) {
+        free(source);
+        unlink(meta_path);
         http_respond(fd, 400, "text/plain",
                      "Compilation failed — check server stderr for details.\n", 56);
         return;
     }
 
     if (emit_sb3(program, tmp) != 0) {
+        free(source);
+        unlink(meta_path);
         http_respond(fd, 500, "text/plain", "Emitter failed to write .sb3\n", 31);
         return;
     }
+
+    if (meta_path[0]) {
+        char command[1024];
+        snprintf(command, sizeof(command),
+                 "node \"%s/patch-sb3.js\" \"%s\" \"%s\"",
+                 g_ide_dir, tmp, meta_path);
+        if (system(command) != 0) {
+            free(source);
+            unlink(meta_path);
+            unlink(tmp);
+            http_respond(fd, 400, "text/plain", "Failed to apply costume assets\n", 34);
+            return;
+        }
+        unlink(meta_path);
+    }
+    free(source);
 
     size_t len = 0;
     char *sb3 = read_file_binary(tmp, &len);
