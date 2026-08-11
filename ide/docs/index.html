@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JAPPL Docs</title>
+<style>
+:root{--bg:#f7f7f7;--panel:#fff;--text:#333;--muted:#777;--blue:#4c97ff;--purple:#9966ff;--border:#ddd;}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 system-ui,-apple-system,sans-serif}main{padding:18px 16px 40px}h1{font-size:25px;margin:0 0 4px;color:#575e75}h2{font-size:18px;margin:24px 0 8px;color:#4c97ff;border-bottom:2px solid #eee;padding-bottom:4px}h3{font-size:15px;margin:16px 0 5px}p{margin:7px 0}code{background:#eee;border-radius:4px;padding:1px 4px;font-family:monospace}pre{background:#252526;color:#eee;border-radius:6px;padding:10px;overflow:auto;font:12px/1.5 monospace}.note{background:#eaf3ff;border-left:4px solid #4c97ff;padding:8px 10px;margin:10px 0}.block{display:inline-block;border-radius:14px;padding:3px 9px;color:white;background:#4c97ff;font-family:monospace;font-size:12px}.looks{background:#9966ff}.control{background:#ffab19}.sensing{background:#5cb1d6}.variables{background:#ff8c1a}ul{padding-left:20px}a{color:#4c97ff}
+</style>
+</head>
+<body><main>
+<h1>JAPPL Documentation</h1><p>A quick reference for writing Scratch-style programs in JAPPL.</p>
+<div class="note">JAPPL compiles to <code>.sb3</code> projects. Use <b>Compile &amp; Run</b> in the IDE to test your project.</div>
+<h2>Basics</h2><p>Statements use Scratch-like syntax. Text literals must be surrounded by double quotes.</p><pre>when (green flag)
+{
+    say ("Hello world") for (2) seconds
+    move (10) steps
+}</pre><p>An unquoted name is interpreted as an expression, such as a variable. Therefore <code>say (hello)</code> reads the value of the variable <code>hello</code>, while <code>say ("hello")</code> displays the text.</p>
+<h2>Events</h2><p><span class="block">when (green flag)</span> starts a script when the project is run.</p><pre>when (green flag)
+{
+    say ("Started!")
+}</pre>
+<h2>Motion</h2><p>Common motion blocks include:</p><ul><li><code>move (10) steps</code></li><li><code>turn cw (15) degrees</code></li><li><code>go to x (0) y (0)</code></li><li><code>change x by (10)</code></li><li><code>change y by (10)</code></li></ul>
+<h2>Looks</h2><p><span class="block looks">say</span> displays text. Costumes can be selected by name.</p><pre>say ("Hello!") for (2) seconds
+switch costume to (costume1)
+next costume</pre>
+<h2>Variables</h2><p>Variables are expressions when used without quotes. Their value can be changed using the variable blocks supported by JAPPL.</p><pre>set (score) to (10)
+change (score) by (1)
+say (score)</pre>
+<h2>Lists</h2><p>Lists support adding, deleting, replacing and reading items where supported by the current compiler.</p><pre>add ("apple") to (my list)
+add ("banana") to (my list)</pre>
+<h2>Control</h2><p>Use loops and conditions to control scripts.</p><pre>repeat (10)
+{
+    move (10) steps
+}
+if &lt;score &gt; 10&gt;
+{
+    say ("High score!")
+}</pre>
+<h2>Operators &amp; strings</h2><p>JAPPL supports Scratch-style arithmetic, comparisons and boolean expressions. Use parentheses for block inputs and quotes for literal strings.</p><pre>say ((2) + (3))
+say ("hello world")
+say (score)</pre>
+<h2>Custom blocks</h2><p>Custom blocks can be declared and called using JAPPL's custom-block syntax supported by the compiler.</p>
+<h2>Costumes</h2><p>Add image files through the IDE's <b>Costumes</b> panel. When you compile, the assets are included in the generated SB3.</p>
+<h2>Compile &amp; Run</h2><ol><li>Write your JAPPL program in the center editor.</li><li>Click <b>Compile &amp; Run</b>.</li><li>The generated SB3 is packaged locally and shown in the stage.</li><li>Use the green flag and stop buttons to control the project.</li></ol>
+<h2>Tips</h2><ul><li>Quote literal text: <code>"hello"</code>.</li><li>Use variable names without quotes when you want their value.</li><li>Compile after changing source or costumes.</li><li>If compilation fails, check the error panel below the editor.</li></ul>
+</main></body></html>
