@@ -1,0 +1,90 @@
+name: Repair Packager integration
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('ide/index.html')
+          s = p.read_text()
+          a = s.index('async function loadProject(blob) {')
+          b = s.index('function updateStageSize()', a)
+          new = '''async function loadProject(blob) {
+            setStatus('loading…', '');
+            document.getElementById('stage-label').textContent = 'Loading…';
+            document.getElementById('stage-placeholder').style.display = 'none';
+            const iframe = document.getElementById('stage-iframe');
+            iframe.style.display = 'block';
+            const backendUrl = document.getElementById('backend-url').value.trim() || location.origin;
+            iframe.onload = () => {
+              setStatus('running', 'ok');
+              document.getElementById('stage-label').textContent = 'Running';
+            };
+            iframe.onerror = () => {
+              setStatus('preview failed', 'err');
+              document.getElementById('stage-label').textContent = 'Preview failed';
+            };
+            iframe.src = backendUrl + '/preview?ts=' + Date.now();
+          }
+
+          function greenFlag() {
+            const iframe = document.getElementById('stage-iframe');
+            if (!iframe || iframe.style.display === 'none') { compileAndRun(); return; }
+            iframe.src = iframe.src.split('?')[0] + '?ts=' + Date.now();
+          }
+
+          function stopAll() {
+            const iframe = document.getElementById('stage-iframe');
+            if (!iframe) return;
+            iframe.src = 'about:blank';
+            iframe.style.display = 'none';
+            document.getElementById('stage-placeholder').style.display = 'flex';
+            document.getElementById('stage-label').textContent = 'Stopped';
+            setStatus('stopped');
+          }
+
+          '''
+          p.write_text(s[:a] + new + s[b:])
+
+          p = Path('server.c')
+          s = p.read_text()
+          s = re.sub(r'/\*\n \* The existing IDE calls.*?\nstatic void handle_static', 'static void handle_static', s, count=1, flags=re.S)
+          a = s.index('    if (!strcmp(url, "/") || !strcmp(url, "/index.html")) {')
+          b = s.index('    if (!strncmp(url, "/static/", 8)', a)
+          new = '''    if (!strcmp(url, "/") || !strcmp(url, "/index.html")) {
+        size_t len = 0;
+        char *body = read_file_binary(g_ide_html, &len);
+        if (!body) {
+            http_respond(fd, 404, "text/plain", "Not Found\\n", 10);
+            return;
+        }
+        http_respond(fd, 200, "text/html; charset=utf-8", body, len);
+        free(body);
+        return;
+    }
+
+'''
+          p.write_text(s[:a] + new + s[b:])
+          PY
+      - name: Commit and push main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ide/index.html server.c
+          git commit -m 'Fix IDE local TurboWarp Packager preview'
+          git push origin main
