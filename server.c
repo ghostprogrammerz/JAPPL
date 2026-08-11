@@ -17,6 +17,9 @@
 #define MAX_REQUEST  (4 * 1024 * 1024)  /* 4 MB */
 #define TMPDIR       "/tmp"
 
+static char g_static_dir[4096];   /* set in main() — path to ide/static */
+static char g_ide_html[4096];     /* path to ide/index.html */
+
 /* ── helpers ──────────────────────────────────────────────────────── */
 
 static void send_all(int fd, const char *buf, size_t len) {
@@ -167,6 +170,45 @@ static int read_request(int fd, Request *req) {
     return 0;
 }
 
+/* ── static file handler ──────────────────────────────────────────── */
+
+static const char *mime_for(const char *path) {
+    const char *dot = strrchr(path, '.');
+    if (!dot) return "application/octet-stream";
+    if (strcmp(dot, ".html") == 0) return "text/html; charset=utf-8";
+    if (strcmp(dot, ".js")   == 0) return "application/javascript";
+    if (strcmp(dot, ".css")  == 0) return "text/css";
+    return "application/octet-stream";
+}
+
+static void handle_static(int fd, const char *url_path) {
+    char disk_path[4096];
+
+    if (strcmp(url_path, "/") == 0 || strcmp(url_path, "/index.html") == 0) {
+        snprintf(disk_path, sizeof(disk_path), "%s", g_ide_html);
+    } else if (strncmp(url_path, "/static/", 8) == 0) {
+        /* strip leading /static/ and reject any .. traversal */
+        const char *file = url_path + 8;
+        if (strstr(file, "..") || strchr(file, '/')) {
+            http_respond(fd, 403, "text/plain", "Forbidden\n", 10);
+            return;
+        }
+        snprintf(disk_path, sizeof(disk_path), "%s/%s", g_static_dir, file);
+    } else {
+        http_respond(fd, 404, "text/plain", "Not Found\n", 10);
+        return;
+    }
+
+    size_t len = 0;
+    char *body = read_file_binary(disk_path, &len);
+    if (!body) {
+        http_respond(fd, 404, "text/plain", "Not Found\n", 10);
+        return;
+    }
+    http_respond(fd, 200, mime_for(disk_path), body, len);
+    free(body);
+}
+
 /* ── compile handler ──────────────────────────────────────────────── */
 
 static void handle_compile(int fd, const char *src, size_t src_len) {
@@ -222,6 +264,13 @@ static void handle_connection(int fd) {
         goto done;
     }
 
+    if (strcmp(req.path, "/") == 0 ||
+        strcmp(req.path, "/index.html") == 0 ||
+        strncmp(req.path, "/static/", 8) == 0) {
+        handle_static(fd, req.path);
+        goto done;
+    }
+
     if (strcmp(req.path, "/compile") == 0) {
         if (strcmp(req.method, "POST") != 0) {
             http_respond(fd, 405, "text/plain", "Method Not Allowed\n", 19);
@@ -250,6 +299,23 @@ done:
 int main(int argc, char **argv) {
     int port = DEFAULT_PORT;
     if (argc >= 2) port = atoi(argv[1]);
+
+    /* Resolve ide/ relative to the executable */
+    {
+        char exe[4096] = {0};
+        ssize_t r = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+        if (r > 0) {
+            exe[r] = '\0';
+            char *slash = strrchr(exe, '/');
+            if (slash) *slash = '\0';
+            snprintf(g_static_dir, sizeof(g_static_dir), "%s/ide/static", exe);
+            snprintf(g_ide_html,   sizeof(g_ide_html),   "%s/ide/index.html", exe);
+        } else {
+            /* fallback: relative to cwd */
+            snprintf(g_static_dir, sizeof(g_static_dir), "ide/static");
+            snprintf(g_ide_html,   sizeof(g_ide_html),   "ide/index.html");
+        }
+    }
 
     int srv = socket(AF_INET, SOCK_STREAM, 0);
     if (srv < 0) { perror("socket"); return 1; }
