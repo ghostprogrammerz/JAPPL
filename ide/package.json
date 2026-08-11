@@ -1,0 +1,7 @@
+{
+  "name": "jappl-ide-runtime",
+  "private": true,
+  "dependencies": {
+    "@turbowarp/packager": "3.13.0"
+  }
+}
