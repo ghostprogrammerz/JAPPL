@@ -554,8 +554,7 @@
           </svg>
           <p>Compile to see your project</p>
         </div>
-        <iframe id="tw-iframe" style="display:none" allow="autoplay; fullscreen"
-          sandbox="allow-scripts allow-same-origin allow-modals"></iframe>
+        <canvas id="stage-canvas" style="display:none;width:100%;height:100%;image-rendering:pixelated"></canvas>
       </div>
     </div>
 
@@ -1041,24 +1040,124 @@ async function compileOnly() {
 async function compileAndRun() {
   const blob = await compileOnly();
   if (!blob) return;
-  loadIntoTurboWarp(blob);
+  loadProject(blob);
 }
 
-function loadIntoTurboWarp(blob) {
-  const url = URL.createObjectURL(blob);
-  document.getElementById('stage-label').textContent = 'Running…';
+async function loadProject(blob) {
+  setStatus('loading…', '');
+  document.getElementById('stage-label').textContent = 'Loading…';
   document.getElementById('stage-placeholder').style.display = 'none';
+  const canvas = document.getElementById('stage-canvas');
+  canvas.style.display = 'block';
 
-  const iframe = document.getElementById('tw-iframe');
-  iframe.style.display = 'block';
+  const buf = await blob.arrayBuffer();
 
-  // TurboWarp embed — load project from URL
-  const twUrl = `https://turbowarp.org/editor?project_url=${encodeURIComponent(url)}`;
-  iframe.src = twUrl;
+  if (window._vm) {
+    window._vm.stopAll();
+    window._vm.clear();
+  }
 
-  iframe.onload = () => {
-    document.getElementById('stage-label').textContent = 'Loaded';
-  };
+  // init VM + renderer lazily
+  if (!window._vm) {
+    await initScratch(canvas);
+  } else {
+    resizeStage();
+  }
+
+  try {
+    await window._vm.loadProject(buf);
+    window._vm.start();
+    window._vm.greenFlag();
+    setStatus('running', 'ok');
+    document.getElementById('stage-label').textContent = 'Running';
+  } catch(e) {
+    setStatus('load error', 'err');
+    showErrors([String(e)]);
+  }
+}
+
+async function initScratch(canvas) {
+  return new Promise((resolve, reject) => {
+    // scratch-vm, scratch-render, scratch-storage must be loaded as scripts
+    function doInit() {
+      const VM = window.VirtualMachine;
+      const Renderer = window.ScratchRender;
+      const Storage = window.ScratchStorage;
+
+      if (!VM || !Renderer || !Storage) {
+        reject(new Error('Scratch libs not loaded — is the C backend serving /static/?'));
+        return;
+      }
+
+      const vm = new VM();
+      window._vm = vm;
+
+      // renderer
+      const renderer = new Renderer(canvas);
+      vm.attachRenderer(renderer);
+
+      // storage
+      const storage = new Storage();
+      // teach storage to handle asset fetches (default scratch CDN)
+      const AssetType = storage.AssetType;
+      storage.addWebStore(
+        [AssetType.ImageVector, AssetType.ImageBitmap, AssetType.Sound],
+        asset => `https://assets.scratch.mit.edu/internalapi/asset/${asset.assetId}.${asset.dataFormat}/get/`
+      );
+      vm.attachStorage(storage);
+
+      // audio (optional — graceful if missing)
+      if (window.AudioEngine) {
+        const audio = new window.AudioEngine();
+        vm.attachAudioEngine(audio);
+      }
+
+      // resize canvas to match container
+      resizeStage();
+      window.addEventListener('resize', resizeStage);
+
+      // runtime events
+      vm.runtime.on('PROJECT_RUN_START', () => {
+        document.getElementById('stage-label').textContent = 'Running';
+      });
+      vm.runtime.on('PROJECT_RUN_STOP', () => {
+        document.getElementById('stage-label').textContent = 'Stopped';
+      });
+
+      resolve();
+    }
+
+    // if already loaded (e.g. second compile), just init
+    if (window.VirtualMachine && window.ScratchRender && window.ScratchStorage) {
+      doInit(); return;
+    }
+
+    // load scripts from backend /static/
+    let loaded = 0;
+    const scripts = [
+      '/static/scratch-storage.js',
+      '/static/scratch-render.js',
+      '/static/scratch-vm.js',
+    ];
+    scripts.forEach(src => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => { if (++loaded === scripts.length) doInit(); };
+      s.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(s);
+    });
+  });
+}
+
+function resizeStage() {
+  if (!window._vm) return;
+  const container = document.getElementById('stage-container');
+  const w = container.offsetWidth;
+  const h = container.offsetHeight;
+  const canvas = document.getElementById('stage-canvas');
+  canvas.width = w;
+  canvas.height = h;
+  window._vm.renderer && window._vm.renderer.resize(w, h);
 }
 
 function downloadSb3() {
@@ -1073,16 +1172,15 @@ function downloadSb3() {
 // STAGE CONTROLS
 // ─────────────────────────────────────────────
 function greenFlag() {
-  const iframe = document.getElementById('tw-iframe');
-  if (iframe.style.display === 'none') { compileAndRun(); return; }
-  try { iframe.contentWindow.postMessage({ type: 'green-flag' }, '*'); }
-  catch(e) { /* cross-origin, just reload */ compileAndRun(); }
+  if (!window._vm) { compileAndRun(); return; }
+  window._vm.greenFlag();
+  document.getElementById('stage-label').textContent = 'Running';
 }
 
 function stopAll() {
-  const iframe = document.getElementById('tw-iframe');
-  try { iframe.contentWindow.postMessage({ type: 'stop' }, '*'); }
-  catch(e) {}
+  if (!window._vm) return;
+  window._vm.stopAll();
+  document.getElementById('stage-label').textContent = 'Stopped';
 }
 
 function fullscreen() {
@@ -1098,6 +1196,7 @@ function updateStageSize() {
   const w = panel.offsetWidth;
   const h = Math.round(w * 0.75); // 4:3
   document.getElementById('stage-container').style.height = Math.min(h, 280) + 'px';
+  resizeStage();
 }
 window.addEventListener('resize', updateStageSize);
 updateStageSize();
