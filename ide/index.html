@@ -1128,7 +1128,7 @@ async function loadZipBlob(blob) {
   }
 
   const buf = await blob.arrayBuffer();
-  const zip = await JSZip.loadAsync(buf);
+  const zip = await window.JSZip.loadAsync(buf);
 
   // read project.jappl
   const japplFile = zip.file('project.jappl');
