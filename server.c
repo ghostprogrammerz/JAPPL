@@ -12,6 +12,7 @@
 
 #include "parser.h"
 #include "emitter.h"
+#include "decompiler.h"
 
 #define DEFAULT_PORT 8765
 #define MAX_REQUEST (32 * 1024 * 1024)
@@ -451,7 +452,37 @@ static void handle_connection(int fd) {
         goto done;
     }
 
-    http_respond(fd, 404, "text/plain", "Not Found\n", 10);
+    if (!strcmp(r.path, "/decompile")) {
+        if (strcmp(r.method, "POST")) {
+            http_respond(fd, 405, "text/plain", "Method Not Allowed\n", 19);
+            goto done;
+        }
+        if (!r.body || !r.body_len) {
+            http_respond(fd, 400, "text/plain", "Empty body\n", 11);
+            goto done;
+        }
+        /* write uploaded sb3 to tmp file */
+        char sb3_tmp[256], zip_tmp[256];
+        snprintf(sb3_tmp, sizeof(sb3_tmp), TMPDIR "/jappl_%d_in.sb3", (int)getpid());
+        snprintf(zip_tmp, sizeof(zip_tmp), TMPDIR "/jappl_%d_out.zip", (int)getpid());
+        FILE *sf = fopen(sb3_tmp, "wb");
+        if (!sf) { http_respond(fd, 500, "text/plain", "Cannot write temp file\n", 23); goto done; }
+        fwrite(r.body, 1, r.body_len, sf);
+        fclose(sf);
+        if (decompile_sb3(sb3_tmp, zip_tmp) != 0) {
+            unlink(sb3_tmp);
+            http_respond(fd, 500, "text/plain", "Decompile failed\n", 17);
+            goto done;
+        }
+        unlink(sb3_tmp);
+        size_t zlen = 0;
+        char *zbuf = read_file_binary(zip_tmp, &zlen);
+        unlink(zip_tmp);
+        if (!zbuf) { http_respond(fd, 500, "text/plain", "Cannot read output zip\n", 23); goto done; }
+        http_respond(fd, 200, "application/zip", zbuf, zlen);
+        free(zbuf);
+        goto done;
+    }
 
 done:
     free(r.body);

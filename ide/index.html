@@ -535,6 +535,11 @@
     Open
   </button>
   <input type="file" id="open-zip-input" accept=".zip" style="display:none" onchange="openZipFile(this)">
+  <button class="btn btn-secondary" onclick="triggerOpenSb3()" title="Load .sb3 and decompile">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h6l4 4v9H4V2z"/><polyline points="10,2 10,6 14,6"/><path d="M6 10h4M6 12h2"/></svg>
+    Open .sb3
+  </button>
+  <input type="file" id="open-sb3-input" accept=".sb3" style="display:none" onchange="openSb3File(this)">
   <button class="btn btn-secondary" onclick="downloadSb3()" id="btn-download" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v7M5 8l3 3 3-3M3 13h10"/></svg>
     .sb3
@@ -1062,13 +1067,45 @@ function triggerOpenZip() {
   document.getElementById('open-zip-input').click();
 }
 
+function triggerOpenSb3() {
+  document.getElementById('open-sb3-input').click();
+}
+
+async function openSb3File(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  setStatus('decompiling…', '');
+  try {
+    const resp = await fetch('/decompile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    if (!resp.ok) {
+      const msg = await resp.text();
+      setStatus('decompile failed: ' + msg, 'err');
+      return;
+    }
+    const blob = await resp.blob();
+    // reuse openZipFile logic by creating a fake file input result
+    await loadZipBlob(blob);
+    setStatus('decompiled ✓', 'ok');
+  } catch (e) {
+    setStatus('decompile error: ' + e.message, 'err');
+  }
+}
+
 async function openZipFile(input) {
   const file = input.files[0];
   input.value = '';
   if (!file) return;
-
   setStatus('opening…', '');
-  let JSZip;
+  await loadZipBlob(file);
+  setStatus('opened ✓', 'ok');
+}
+
+async function loadZipBlob(blob) {
   try {
     JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js')).default
              || window.JSZip;
@@ -1172,7 +1209,6 @@ async function openZipFile(input) {
   renderTabs();
   renderSpriteGrid();
   renderListPanel();
-  setStatus('opened ✓', 'ok');
 }
 
 // ─────────────────────────────────────────────
