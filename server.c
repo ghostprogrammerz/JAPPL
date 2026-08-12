@@ -285,7 +285,7 @@ static void handle_static(int fd, const char *url) {
         if (!*file || !strcmp(file, "index.html")) file = "index.html";
         snprintf(path, sizeof(path), "%s/docs/%s", g_ide_dir, file);
     } else if (!strcmp(url, "/jszip.js")) {
-        snprintf(path, sizeof(path), "%s/node_modules/jszip/dist/jszip.min.js", g_ide_dir);
+        snprintf(path, sizeof(path), "%s/jszip.min.js", g_static_dir);
     } else {
         http_respond(fd, 404, "text/plain", "Not Found\n", 10);
         return;
