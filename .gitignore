@@ -1,5 +1,6 @@
 *.o
 jappl2sb3
+jappl2sb3-server
 jappl2sb3_asan
 *.sb3
 *.jappl
