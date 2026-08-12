@@ -53,8 +53,6 @@ function extFor(c) {
       });
       zip.file(md5ext, data);
     }
-
-    if (target.costumes.length) zip.remove('bcf454acf82e4f0b1f90e8b3d7c16c7d.png');
   }
 
   zip.file('project.json', JSON.stringify(project));
