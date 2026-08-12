@@ -1076,24 +1076,24 @@ async function openSb3File(input) {
   input.value = '';
   if (!file) return;
   setStatus('decompiling…', '');
-  try {
-    const resp = await fetch('/decompile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: file,
-    });
-    if (!resp.ok) {
-      const msg = await resp.text();
-      setStatus('decompile failed: ' + msg, 'err');
-      return;
-    }
-    const blob = await resp.blob();
-    // reuse openZipFile logic by creating a fake file input result
-    await loadZipBlob(blob);
-    setStatus('decompiled ✓', 'ok');
-  } catch (e) {
-    setStatus('decompile error: ' + e.message, 'err');
-  }
+
+  const buf = await file.arrayBuffer();
+
+  const blob = await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/decompile');
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.responseType = 'blob';
+    xhr.onload = () => {
+      if (xhr.status === 200) resolve(xhr.response);
+      else xhr.response.text().then(t => reject(new Error(t))).catch(() => reject(new Error('status ' + xhr.status)));
+    };
+    xhr.onerror = () => reject(new Error('network error'));
+    xhr.send(buf);
+  });
+
+  await loadZipBlob(blob);
+  setStatus('decompiled ✓', 'ok');
 }
 
 async function openZipFile(input) {
