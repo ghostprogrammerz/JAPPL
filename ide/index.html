@@ -535,6 +535,11 @@
     Open .sb3
   </button>
   <input type="file" id="open-sb3-input" accept=".sb3" style="display:none" onchange="openSb3File(this)">
+  <button class="btn btn-secondary" onclick="triggerOpenZip()" title="Open decompiled .zip">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h4l1.5 2H13v7H3V4z"/><path d="M7 9v3M5.5 10.5l1.5 1.5 1.5-1.5"/></svg>
+    Open .zip
+  </button>
+  <input type="file" id="open-zip-input" accept=".zip" style="display:none" onchange="openZipFile(this)">
   <button class="btn btn-secondary" onclick="downloadSb3()" id="btn-download" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v7M5 8l3 3 3-3M3 13h10"/></svg>
     .sb3
@@ -1071,25 +1076,31 @@ async function openSb3File(input) {
   input.value = '';
   if (!file) return;
   setStatus('decompiling…', '');
-
-  const buf = await file.arrayBuffer();
-
-  const blob = await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/decompile');
-    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-    xhr.setRequestHeader('X-Filename', file.name);
-    xhr.responseType = 'blob';
-    xhr.onload = () => {
-      if (xhr.status === 200) resolve(xhr.response);
-      else xhr.response.text().then(t => reject(new Error(t))).catch(() => reject(new Error('status ' + xhr.status)));
-    };
-    xhr.onerror = () => reject(new Error('network error'));
-    xhr.send(buf);
-  });
-
-  await loadZipBlob(blob);
-  setStatus('decompiled ✓', 'ok');
+  try {
+    const buf = await file.arrayBuffer();
+    const blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/decompile');
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.setRequestHeader('X-Filename', file.name);
+      xhr.responseType = 'blob';
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          resolve(xhr.response);
+        } else {
+          const r = new FileReader();
+          r.onload = () => reject(new Error('server: ' + r.result));
+          r.readAsText(xhr.response);
+        }
+      };
+      xhr.onerror = () => reject(new Error('network error'));
+      xhr.send(buf);
+    });
+    await loadZipBlob(blob);
+    setStatus('decompiled ✓', 'ok');
+  } catch(e) {
+    setStatus('error: ' + e.message, 'err');
+  }
 }
 
 async function openZipFile(input) {
@@ -1097,27 +1108,23 @@ async function openZipFile(input) {
   input.value = '';
   if (!file) return;
   setStatus('opening…', '');
-  await loadZipBlob(file);
-  setStatus('opened ✓', 'ok');
+  try {
+    await loadZipBlob(file);
+    setStatus('opened ✓', 'ok');
+  } catch(e) {
+    setStatus('error: ' + e.message, 'err');
+  }
 }
 
 async function loadZipBlob(blob) {
-  try {
-    JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js')).default
-             || window.JSZip;
-  } catch(_) {
-    JSZip = window.JSZip;
-  }
-  if (!JSZip) {
-    // fallback: load via script tag
+  if (!window.JSZip) {
     await new Promise((res, rej) => {
-      if (window.JSZip) return res();
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
-      s.onload = res; s.onerror = rej;
+      s.src = '/jszip.js';
+      s.onload = res;
+      s.onerror = rej;
       document.head.appendChild(s);
     });
-    JSZip = window.JSZip;
   }
 
   const buf = await file.arrayBuffer();

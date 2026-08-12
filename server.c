@@ -280,10 +280,12 @@ static void handle_static(int fd, const char *url) {
         }
         snprintf(path, sizeof(path), "%s/%s/%s", g_static_dir, subdir, file);
     } else if (!strncmp(url, "/docs/", 6) || !strcmp(url, "/docs")) {
-        const char *file = url + 6; /* may be empty string for /docs/ */
+        const char *file = url + 6;
         if (strstr(file, "..")) { http_respond(fd, 403, "text/plain", "Forbidden\n", 10); return; }
         if (!*file || !strcmp(file, "index.html")) file = "index.html";
         snprintf(path, sizeof(path), "%s/docs/%s", g_ide_dir, file);
+    } else if (!strcmp(url, "/jszip.js")) {
+        snprintf(path, sizeof(path), "%s/node_modules/jszip/dist/jszip.min.js", g_ide_dir);
     } else {
         http_respond(fd, 404, "text/plain", "Not Found\n", 10);
         return;
@@ -423,7 +425,7 @@ static void handle_connection(int fd) {
 
     if (!strcmp(r.path, "/") || !strcmp(r.path, "/index.html") ||
         !strncmp(r.path, "/static/", 8) || !strncmp(r.path, "/chunks/", 8) ||
-        !strncmp(r.path, "/docs", 5)) {
+        !strncmp(r.path, "/docs", 5) || !strcmp(r.path, "/jszip.js")) {
         handle_static(fd, r.path);
         goto done;
     }
