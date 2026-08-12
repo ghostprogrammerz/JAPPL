@@ -1,3 +1,4 @@
+node_modules/
 *.o
 jappl2sb3
 jappl2sb3-server
