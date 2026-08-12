@@ -1643,7 +1643,8 @@ static Script *parse_script(Parser *p) {
         return sc;
     }
 
-    if (check(p, TOK_IDENT) && strcmp(cur(p).value, "define") == 0) {
+    if (check(p, TOK_IDENT) && strcmp(cur(p).value, "define") == 0
+        && peek(p).type == TOK_LPAREN) {
         advance(p);
         expect(p, TOK_LPAREN);
         char *pname = read_name_until(p, TOK_RPAREN, TOK_EOF);

@@ -385,10 +385,11 @@ static void decompile_input_expr(Buf *out, JVal *blocks, JVal *input_arr) {
             return;
         }
         if (strcmp(op,"operator_random")==0)   {
-            buf_cat(out,"pick random ");
+            buf_cat(out,"pick random (");
             decompile_input_expr(out,blocks,jobj_get(inputs,"FROM"));
-            buf_cat(out," to ");
+            buf_cat(out,") to (");
             decompile_input_expr(out,blocks,jobj_get(inputs,"TO"));
+            buf_cat(out,")");
             return;
         }
         if (strcmp(op,"operator_join")==0)     {
@@ -584,17 +585,29 @@ static void decompile_input_expr(Buf *out, JVal *blocks, JVal *input_arr) {
         return;
     }
 
-    /* val is an array → primitive [type, value] */
+    /* val is an array → primitive [type, value, ...] */
     if (val->type == JArr) {
-        JVal *pval = jarr_get(val, 1);
+        JVal *ptype = jarr_get(val, 0);
+        JVal *pval  = jarr_get(val, 1);
         if (!pval) { buf_cat(out,"0"); return; }
+        int scratch_type = (ptype && ptype->type==JNum) ? (int)ptype->number : -1;
         if (pval->type==JStr)  {
-            buf_printf(out,"(%s)", pval->string);
+            /* Scratch primitive types:
+               10 = string literal  → emit as bare (value); single-word safe
+               12 = variable ref    → must use variable (name) for multi-word names
+               13 = list ref        → same
+               anything else        → treat as variable ref for safety */
+            if (scratch_type == 12 || scratch_type == 13 || scratch_type == -1) {
+                buf_printf(out,"variable (%s)", pval->string);
+            } else {
+                /* string/colour literal — keep original bare-paren form */
+                buf_printf(out,"(%s)", pval->string);
+            }
             return;
         }
         if (pval->type==JNum)  {
             double d = pval->number;
-            if (d == (int)d) buf_printf(out,"%d", (int)d);
+            if (d == (long long)d) buf_printf(out,"%lld", (long long)d);
             else buf_printf(out,"%g", d);
             return;
         }
