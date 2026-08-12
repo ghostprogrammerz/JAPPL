@@ -1,5 +1,7 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -g -std=c11
+
+# Keep the root entry points tiny; implementation lives in focused folders.
 SRC     = main.c lexer.c ast.c parser.c emitter.c decompiler.c
 OBJ     = $(SRC:.c=.o)
 TARGET  = jappl2sb3
