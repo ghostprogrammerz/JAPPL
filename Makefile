@@ -1,41 +1,27 @@
-CC      = gcc
-CFLAGS  = -Wall -Wextra -g -std=c11
+CC = gcc
+CFLAGS = -Wall -Wextra -g -std=c11
+LDFLAGS = -lz
 
-# Keep the root entry points tiny; implementation lives in focused folders.
-SRC     = main.c lexer.c ast.c parser.c emitter.c decompiler.c
-OBJ     = $(SRC:.c=.o)
-TARGET  = jappl2sb3
+TARGET = jappl2sb3
 
-SRV_SRC = server.c lexer.c ast.c parser.c emitter.c decompiler.c
-SRV_OBJ = $(SRV_SRC:.c=.o)
-SRV     = jappl2sb3-server
+SOURCES = main.c lexer.c ast.c parser.c emitter.c decompiler.c
+OBJECTS = $(SOURCES:.c=.o)
 
-all: $(TARGET) $(SRV)
+all: $(TARGET) server
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ -lz
+$(TARGET): $(OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-$(SRV): $(SRV_OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ -lz
+server: server.o $(OBJECTS)
+	$(CC) $(CFLAGS) -o jappl-server $^ $(LDFLAGS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-PORT ?= 8080
-
-run: all
-	@test -d ide/node_modules || (echo "Installing npm deps..." && cd ide && npm install)
-	@kill $$(pgrep -x jappl2sb3-server) 2>/dev/null || true
-	@sleep 0.1
-	@./jappl2sb3-server $(PORT) &
-	@sleep 0.3
-	@echo "Server started → http://localhost:$(PORT)"
-	@xdg-open "http://localhost:$(PORT)" 2>/dev/null || true
-
-kill:
-	@kill $$(pgrep -x jappl2sb3-server) 2>/dev/null && echo "Server stopped" || echo "Not running"
+server.o: server.c
+	$(CC) $(CFLAGS) -Icompiler -Idecompiler -c $< -o $@
 
 clean:
-	rm -f $(OBJ) $(SRV_OBJ) $(TARGET) $(SRV)
+	rm -f $(OBJECTS) server.o $(TARGET) jappl-server
 
-.PHONY: all run kill clean
+.PHONY: all clean
