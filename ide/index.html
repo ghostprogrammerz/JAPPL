@@ -516,6 +516,7 @@
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 </style>
 </head>
+<script src="/jszip.js"></script>
 <body>
 
 <!-- TOP BAR -->
@@ -1117,16 +1118,6 @@ async function openZipFile(input) {
 }
 
 async function loadZipBlob(blob) {
-  if (!window.JSZip) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = '/jszip.js';
-      s.onload = res;
-      s.onerror = rej;
-      document.head.appendChild(s);
-    });
-  }
-
   const buf = await blob.arrayBuffer();
   const zip = await window.JSZip.loadAsync(buf);
 
