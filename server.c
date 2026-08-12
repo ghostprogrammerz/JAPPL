@@ -270,6 +270,11 @@ static void handle_static(int fd, const char *url) {
             return;
         }
         snprintf(path, sizeof(path), "%s/%s/%s", g_static_dir, subdir, file);
+    } else if (!strncmp(url, "/docs/", 6) || !strcmp(url, "/docs")) {
+        const char *file = url + 6; /* may be empty string for /docs/ */
+        if (strstr(file, "..")) { http_respond(fd, 403, "text/plain", "Forbidden\n", 10); return; }
+        if (!*file || !strcmp(file, "index.html")) file = "index.html";
+        snprintf(path, sizeof(path), "%s/docs/%s", g_ide_dir, file);
     } else {
         http_respond(fd, 404, "text/plain", "Not Found\n", 10);
         return;
@@ -408,7 +413,8 @@ static void handle_connection(int fd) {
     }
 
     if (!strcmp(r.path, "/") || !strcmp(r.path, "/index.html") ||
-        !strncmp(r.path, "/static/", 8) || !strncmp(r.path, "/chunks/", 8)) {
+        !strncmp(r.path, "/static/", 8) || !strncmp(r.path, "/chunks/", 8) ||
+        !strncmp(r.path, "/docs", 5)) {
         handle_static(fd, r.path);
         goto done;
     }

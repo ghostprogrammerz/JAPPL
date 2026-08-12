@@ -1492,10 +1492,54 @@ int decompile_sb3(const char *sb3_path, const char *out_zip_path) {
         free(ltxt.buf);
     }
 
-    /* ── 5. copy costume and sound assets from source sb3 ───────── */
+    /* ── 5. copy costume and sound assets + write costumes.json ─── */
+    Buf cjson; buf_init(&cjson);
+    buf_cat(&cjson, "[");
+    int first_sprite = 1;
     for (int i=0;i<targets->arr.count;i++) {
         JVal *t = targets->arr.items[i];
         static const char *asset_keys[] = { "costumes", "sounds", NULL };
+
+        /* costumes.json entry for this target */
+        JVal *tname_v = jobj_get(t, "name");
+        const char *tname = (tname_v && tname_v->type==JStr) ? tname_v->string : "";
+        JVal *costumes_arr = jobj_get(t, "costumes");
+        if (costumes_arr && costumes_arr->type==JArr && costumes_arr->arr.count>0) {
+            if (!first_sprite) buf_cat(&cjson, ",");
+            first_sprite = 0;
+            buf_cat(&cjson, "{\"sprite\":");
+            /* json-encode sprite name */
+            buf_cat(&cjson, "\"");
+            for (const char *p=tname;*p;p++) {
+                if (*p=='"'||*p=='\\') { char esc[3]={'\\',*p,0}; buf_cat(&cjson,esc); }
+                else { char ch[2]={*p,0}; buf_cat(&cjson,ch); }
+            }
+            buf_cat(&cjson, "\",\"costumes\":[");
+            for (int c=0;c<costumes_arr->arr.count;c++) {
+                JVal *cos = costumes_arr->arr.items[c];
+                if (!cos||cos->type!=JObj) continue;
+                JVal *md5v  = jobj_get(cos,"md5ext");
+                JVal *namev = jobj_get(cos,"name");
+                JVal *fmtv  = jobj_get(cos,"dataFormat");
+                JVal *rcxv  = jobj_get(cos,"rotationCenterX");
+                JVal *rcyv  = jobj_get(cos,"rotationCenterY");
+                if (!md5v||md5v->type!=JStr) continue;
+                if (c>0) buf_cat(&cjson,",");
+                buf_cat(&cjson,"{\"md5ext\":");
+                buf_cat(&cjson,"\""); buf_cat(&cjson, md5v->string); buf_cat(&cjson,"\"");
+                buf_cat(&cjson,",\"name\":");
+                const char *cname = (namev&&namev->type==JStr)?namev->string:"costume";
+                buf_cat(&cjson,"\""); buf_cat(&cjson, cname); buf_cat(&cjson,"\"");
+                const char *fmt = (fmtv&&fmtv->type==JStr)?fmtv->string:"png";
+                buf_printf(&cjson,",\"dataFormat\":\"%s\"",fmt);
+                double rcx = (rcxv&&rcxv->type==JNum)?rcxv->number:0;
+                double rcy = (rcyv&&rcyv->type==JNum)?rcyv->number:0;
+                buf_printf(&cjson,",\"rotationCenterX\":%.0f,\"rotationCenterY\":%.0f",rcx,rcy);
+                buf_cat(&cjson,"}");
+            }
+            buf_cat(&cjson,"]}");
+        }
+
         for (int ak=0; asset_keys[ak]; ak++) {
             JVal *arr = jobj_get(t, asset_keys[ak]);
             if (!arr || arr->type!=JArr) continue;
@@ -1505,7 +1549,6 @@ int decompile_sb3(const char *sb3_path, const char *out_zip_path) {
                 JVal *md5v = jobj_get(item, "md5ext");
                 if (!md5v || md5v->type!=JStr) continue;
                 const char *assetname = md5v->string;
-                /* deduplicate */
                 int already=0;
                 for (int k=0;k<ne;k++) {
                     if (strcmp(entries[k].name, assetname)==0) { already=1; break; }
@@ -1522,6 +1565,10 @@ int decompile_sb3(const char *sb3_path, const char *out_zip_path) {
             }
         }
     }
+    buf_cat(&cjson, "]");
+    zip2_add(&z,&entries,&ne,&ecap,
+             "costumes.json",
+             (const unsigned char*)cjson.buf, cjson.len);
 
     zip2_finish(&z, entries, ne);
 
@@ -1535,6 +1582,7 @@ int decompile_sb3(const char *sb3_path, const char *out_zip_path) {
     free(z.data);
     free(code.buf);
     free(vcsv.buf);
+    free(cjson.buf);
     sc_free(&sc);
     return 0;
 
@@ -1544,6 +1592,7 @@ fail:
     free(z.data);
     free(code.buf);
     free(vcsv.buf);
+    free(cjson.buf);
     sc_free(&sc);
     return -1;
 }

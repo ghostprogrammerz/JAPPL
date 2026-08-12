@@ -6,18 +6,18 @@
 <title>JAPPL IDE</title>
 <style>
   :root {
-    --bg:        #1a1a2e;
-    --panel:     #16213e;
-    --surface:   #0f3460;
-    --border:    #1e3a5f;
-    --accent:    #e94560;
-    --accent2:   #0f7c72;
-    --text:      #e8eaf6;
-    --text-dim:  #7986cb;
-    --green:     #4caf50;
-    --red:       #f44336;
-    --bar:       #0d1b2a;
-    --sprite-sel:#1a3a5c;
+    --bg:        #1e1e2e;
+    --panel:     #252535;
+    --surface:   #373759;
+    --border:    #3a3a5c;
+    --accent:    #ff8c00;
+    --accent2:   #4c97ff;
+    --text:      #f0f0f8;
+    --text-dim:  #9999cc;
+    --green:     #59c059;
+    --red:       #ff6680;
+    --bar:       #171728;
+    --sprite-sel:#2e2e50;
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
     --font-ui:   'Inter', system-ui, sans-serif;
     --radius:    6px;
@@ -460,6 +460,56 @@
   }
   #costume-file-input { display: none; }
 
+  /* ── LIST PANEL ── */
+  #list-panel {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bar);
+    max-height: 180px;
+    overflow-y: auto;
+    display: none;
+  }
+  #list-panel.has-lists { display: block; }
+  #list-panel::-webkit-scrollbar { width: 4px; }
+  #list-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .list-item {
+    border-bottom: 1px solid var(--border);
+  }
+  .list-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 10px; cursor: pointer;
+    font-size: 11px; font-weight: 600;
+    color: var(--text-dim); font-family: var(--font-mono);
+    user-select: none;
+    transition: background 0.1s;
+  }
+  .list-header:hover { background: var(--panel); }
+  .list-header .list-arrow {
+    font-size: 9px; transition: transform 0.15s; display: inline-block;
+  }
+  .list-header.open .list-arrow { transform: rotate(90deg); }
+  .list-header .list-count {
+    margin-left: auto; font-size: 10px;
+    background: var(--surface); border-radius: 10px;
+    padding: 1px 6px; color: var(--text-dim);
+  }
+  .list-body {
+    display: none;
+    padding: 4px 10px 6px 24px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text);
+    max-height: 100px; overflow-y: auto;
+    background: var(--panel);
+  }
+  .list-body.open { display: block; }
+  .list-body .list-row {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 1px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .list-body .list-idx { color: var(--text-dim); min-width: 28px; text-align: right; font-size: 10px; }
+  .list-body .list-val { color: var(--text); word-break: break-all; }
+
   /* scrollbars */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -480,6 +530,11 @@
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,8 8,12 12,4"/></svg>
     Compile
   </button>
+  <button class="btn btn-secondary" onclick="triggerOpenZip()" title="Open decompiled .zip">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h4l1.5 2H13v7H3V4z"/><path d="M7 9v3M5.5 10.5l1.5 1.5 1.5-1.5"/></svg>
+    Open
+  </button>
+  <input type="file" id="open-zip-input" accept=".zip" style="display:none" onchange="openZipFile(this)">
   <button class="btn btn-secondary" onclick="downloadSb3()" id="btn-download" style="display:none">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v7M5 8l3 3 3-3M3 13h10"/></svg>
     .sb3
@@ -510,10 +565,10 @@
       Docs
     </div>
     <div id="docs-url-bar">
-      <input id="docs-url-input" type="text" value="https://ghostprogrammerz.github.io/JAPPL/" placeholder="URL">
+      <input id="docs-url-input" type="text" value="/docs/" placeholder="URL">
       <button class="btn btn-secondary" id="docs-go" onclick="loadDocs()">Go</button>
     </div>
-    <iframe id="docs-iframe" src="https://ghostprogrammerz.github.io/JAPPL/" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    <iframe id="docs-iframe" src="/docs/" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
   </div>
 
   <!-- CENTER: EDITOR -->
@@ -526,6 +581,7 @@
       <div id="monaco-editor"></div>
     </div>
     <div id="error-bar"></div>
+    <div id="list-panel"></div>
   </div>
 
   <!-- RIGHT: STAGE + SPRITES -->
@@ -975,7 +1031,165 @@ document.getElementById('rename-modal').onclick = function(e) {
 };
 
 // ─────────────────────────────────────────────
-// DOCS
+// OPEN DECOMPILED ZIP
+// ─────────────────────────────────────────────
+function triggerOpenZip() {
+  document.getElementById('open-zip-input').click();
+}
+
+async function openZipFile(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+
+  setStatus('opening…', '');
+  let JSZip;
+  try {
+    JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js')).default
+             || window.JSZip;
+  } catch(_) {
+    JSZip = window.JSZip;
+  }
+  if (!JSZip) {
+    // fallback: load via script tag
+    await new Promise((res, rej) => {
+      if (window.JSZip) return res();
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    JSZip = window.JSZip;
+  }
+
+  const buf = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+
+  // read project.jappl
+  const japplFile = zip.file('project.jappl');
+  if (!japplFile) { setStatus('not a JAPPL zip', 'err'); return; }
+  const src = await japplFile.async('string');
+
+  // read costumes manifest
+  let costumeManifest = [];
+  const cmFile = zip.file('costumes.json');
+  if (cmFile) {
+    try { costumeManifest = JSON.parse(await cmFile.async('string')); } catch(_) {}
+  }
+
+  // parse sprites from source: sprite (Name) { ... }
+  const newSprites = [];
+  let nextNewId = 1;
+  const spriteRe = /sprite\s*\(([^)]+)\)\s*\{([\s\S]*?)^\}/gm;
+  let m;
+  while ((m = spriteRe.exec(src)) !== null) {
+    const name = m[1].trim();
+    const code = m[2];
+    newSprites.push({
+      id: nextNewId++,
+      name,
+      emoji: EMOJIS[(nextNewId - 2) % EMOJIS.length],
+      code,
+      costumes: [],
+      lists: {},
+    });
+  }
+  // if no sprite blocks found, treat whole file as Sprite1
+  if (newSprites.length === 0) {
+    newSprites.push({ id: nextNewId++, name: 'Sprite1', emoji: EMOJIS[0], code: src, costumes: [], lists: {} });
+  }
+
+  // load costume assets for each sprite
+  const costumeBySprite = new Map(costumeManifest.map(e => [String(e.sprite), e.costumes || []]));
+  for (const sp of newSprites) {
+    const meta = costumeBySprite.get(sp.name) || [];
+    for (const c of meta) {
+      const assetFile = zip.file(c.md5ext);
+      if (!assetFile) continue;
+      const abuf = await assetFile.async('arraybuffer');
+      const ext = (c.dataFormat || 'png').toLowerCase();
+      const mime = ext === 'svg' ? 'image/svg+xml'
+                 : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+                 : ext === 'gif' ? 'image/gif'
+                 : 'image/png';
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(abuf)));
+      sp.costumes.push({
+        name: c.name || c.md5ext,
+        dataUrl: `data:${mime};base64,${b64}`,
+        type: mime,
+        filename: c.md5ext,
+        width: c.rotationCenterX ? c.rotationCenterX * 2 : 0,
+        height: c.rotationCenterY ? c.rotationCenterY * 2 : 0,
+      });
+    }
+  }
+
+  // read list .txt files — map name → items[]
+  // list files are named <listname>.txt
+  const listData = {};
+  for (const fname of Object.keys(zip.files)) {
+    if (!fname.endsWith('.txt')) continue;
+    const lname = fname.slice(0, -4);
+    const content = await zip.files[fname].async('string');
+    listData[lname] = content.split('\n').filter((l, i, arr) => !(i === arr.length - 1 && l === ''));
+  }
+  // attach lists to sprites (global lists go to all, but we just track them separately)
+  globalLists = listData;
+
+  // apply to IDE state
+  sprites = newSprites;
+  activeId = sprites[0].id;
+  nextId = nextNewId;
+
+  if (window._editorSetValue) window._editorSetValue(sprites[0].code);
+  else if (editor) editor.setValue(sprites[0].code);
+
+  renderTabs();
+  renderSpriteGrid();
+  renderListPanel();
+  setStatus('opened ✓', 'ok');
+}
+
+// ─────────────────────────────────────────────
+// LIST PANEL
+// ─────────────────────────────────────────────
+let globalLists = {};
+
+function renderListPanel() {
+  const panel = document.getElementById('list-panel');
+  const entries = Object.entries(globalLists);
+  if (entries.length === 0) {
+    panel.classList.remove('has-lists');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.classList.add('has-lists');
+  panel.innerHTML = entries.map(([name, items]) => `
+    <div class="list-item">
+      <div class="list-header" onclick="toggleList(this)">
+        <span class="list-arrow">▶</span>
+        <span style="color:var(--accent2)">${escHtml(name)}</span>
+        <span class="list-count">${items.length} items</span>
+      </div>
+      <div class="list-body">
+        ${items.length === 0
+          ? '<span style="color:var(--text-dim);font-size:10px">empty</span>'
+          : items.map((v, i) => `<div class="list-row"><span class="list-idx">${i+1}</span><span class="list-val">${escHtml(v)}</span></div>`).join('')
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleList(header) {
+  header.classList.toggle('open');
+  header.nextElementSibling.classList.toggle('open');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 // ─────────────────────────────────────────────
 function loadDocs() {
   const url = document.getElementById('docs-url-input').value.trim();
