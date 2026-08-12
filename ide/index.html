@@ -530,11 +530,6 @@
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,8 8,12 12,4"/></svg>
     Compile
   </button>
-  <button class="btn btn-secondary" onclick="triggerOpenZip()" title="Open decompiled .zip">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h4l1.5 2H13v7H3V4z"/><path d="M7 9v3M5.5 10.5l1.5 1.5 1.5-1.5"/></svg>
-    Open
-  </button>
-  <input type="file" id="open-zip-input" accept=".zip" style="display:none" onchange="openZipFile(this)">
   <button class="btn btn-secondary" onclick="triggerOpenSb3()" title="Load .sb3 and decompile">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h6l4 4v9H4V2z"/><polyline points="10,2 10,6 14,6"/><path d="M6 10h4M6 12h2"/></svg>
     Open .sb3
@@ -1083,6 +1078,7 @@ async function openSb3File(input) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/decompile');
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.setRequestHeader('X-Filename', file.name);
     xhr.responseType = 'blob';
     xhr.onload = () => {
       if (xhr.status === 200) resolve(xhr.response);

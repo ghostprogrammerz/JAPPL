@@ -9,6 +9,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#include <ctype.h>
 
 #include "parser.h"
 #include "emitter.h"
@@ -83,6 +85,7 @@ typedef struct {
     char path[256];
     char *body;
     size_t body_len;
+    char raw_headers[8192];
 } Request;
 
 static int read_request(int fd, Request *r) {
@@ -114,6 +117,11 @@ static int read_request(int fd, Request *r) {
     }
 
 headers_done:
+    {
+        size_t copy = header_end < sizeof(r->raw_headers)-1 ? header_end : sizeof(r->raw_headers)-1;
+        memcpy(r->raw_headers, headers, copy);
+        r->raw_headers[copy] = '\0';
+    }
     {
         char *sp1 = memchr(headers, ' ', header_end);
         if (!sp1) { free(headers); return -1; }
@@ -461,23 +469,57 @@ static void handle_connection(int fd) {
             http_respond(fd, 400, "text/plain", "Empty body\n", 11);
             goto done;
         }
-        /* write uploaded sb3 to tmp file */
-        char sb3_tmp[256], zip_tmp[256];
+
+        /* derive a safe stem from X-Filename header, fallback to "project" */
+        char stem[128] = "project";
+        char *xfn = strstr(r.raw_headers, "x-filename:");
+        if (!xfn) xfn = strcasestr(r.raw_headers, "x-filename:");
+        if (xfn) {
+            xfn += 11;
+            while (*xfn == ' ') xfn++;
+            char *end = strpbrk(xfn, "\r\n");
+            size_t len = end ? (size_t)(end - xfn) : strlen(xfn);
+            if (len > 64) len = 64;
+            char raw[128] = {0};
+            memcpy(raw, xfn, len);
+            /* strip .sb3 extension */
+            char *dot = strrchr(raw, '.');
+            if (dot) *dot = '\0';
+            /* sanitize: keep only alnum, dash, underscore */
+            int si = 0;
+            for (char *p = raw; *p && si < 120; p++) {
+                if (isalnum((unsigned char)*p) || *p == '-' || *p == '_')
+                    stem[si++] = *p;
+                else if (*p == ' ')
+                    stem[si++] = '_';
+            }
+            stem[si] = '\0';
+            if (si == 0) strcpy(stem, "project");
+        }
+
+        /* ensure cache dir exists */
+        char cache_dir[512];
+        snprintf(cache_dir, sizeof(cache_dir), "%s/cache", g_ide_dir[0] ? g_ide_dir : ".");
+        mkdir(cache_dir, 0755);
+
+        char sb3_tmp[512], zip_out[512];
         snprintf(sb3_tmp, sizeof(sb3_tmp), TMPDIR "/jappl_%d_in.sb3", (int)getpid());
-        snprintf(zip_tmp, sizeof(zip_tmp), TMPDIR "/jappl_%d_out.zip", (int)getpid());
+        snprintf(zip_out, sizeof(zip_out), "%s/%s.zip", cache_dir, stem);
+
         FILE *sf = fopen(sb3_tmp, "wb");
         if (!sf) { http_respond(fd, 500, "text/plain", "Cannot write temp file\n", 23); goto done; }
         fwrite(r.body, 1, r.body_len, sf);
         fclose(sf);
-        if (decompile_sb3(sb3_tmp, zip_tmp) != 0) {
+
+        if (decompile_sb3(sb3_tmp, zip_out) != 0) {
             unlink(sb3_tmp);
             http_respond(fd, 500, "text/plain", "Decompile failed\n", 17);
             goto done;
         }
         unlink(sb3_tmp);
+
         size_t zlen = 0;
-        char *zbuf = read_file_binary(zip_tmp, &zlen);
-        unlink(zip_tmp);
+        char *zbuf = read_file_binary(zip_out, &zlen);
         if (!zbuf) { http_respond(fd, 500, "text/plain", "Cannot read output zip\n", 23); goto done; }
         http_respond(fd, 200, "application/zip", zbuf, zlen);
         free(zbuf);
