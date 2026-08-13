@@ -67,9 +67,11 @@ static char *read_name_until(Parser *p, TokenType stop1, TokenType stop2) {
     int  first    = 1;
     while (cur(p).type != stop1 && cur(p).type != stop2
            && cur(p).type != TOK_EOF) {
-        /* don't insert a space separator immediately after or before a % */
+        /* don't insert a space separator immediately after or before a % or - */
         int no_space = (cur(p).type == TOK_PERCENT) ||
-                       (buf[0] && buf[strlen(buf)-1] == '%');
+                       (buf[0] && buf[strlen(buf)-1] == '%') ||
+                       (cur(p).type == TOK_MINUS) ||
+                       (buf[0] && buf[strlen(buf)-1] == '-');
         if (!first && !no_space) strncat(buf, " ", sizeof(buf)-strlen(buf)-1);
         strncat(buf, cur(p).value ? cur(p).value : "", sizeof(buf)-strlen(buf)-1);
         first = 0;
@@ -864,6 +866,16 @@ static Stmt *parse_stmt(Parser *p) {
         parse_body(p, &s->body, &s->body_count);
         return s;
     }
+    /* ── if on edge bounce — MUST come before regular if ── */
+    if (check(p, TOK_IF)) {
+        Token nx = peek(p);
+        if (nx.type == TOK_IDENT && strcmp(nx.value, "on") == 0) {
+            advance(p); advance(p);
+            if (check(p, TOK_IDENT) && strcmp(cur(p).value, "edge") == 0) advance(p);
+            if (check(p, TOK_IDENT) && strcmp(cur(p).value, "bounce") == 0) advance(p);
+            return stmt_new(STMT_IF_ON_EDGE_BOUNCE, line);
+        }
+    }
     if (check(p, TOK_IF)) {
         advance(p);
         Expr *cond = parse_paren_expr(p);
@@ -1479,22 +1491,11 @@ static Stmt *parse_stmt(Parser *p) {
         s->name = strdup(name); s->a = idx; s->b = val; return s;
     }
 
-    /* ── if on edge bounce ── */
-    if (check(p, TOK_IF)) {
-        Token nx = peek(p);
-        if (nx.type == TOK_IDENT && strcmp(nx.value, "on") == 0) {
-            advance(p); advance(p);
-            if (check(p, TOK_IDENT) && strcmp(cur(p).value, "edge") == 0) advance(p);
-            if (check(p, TOK_IDENT) && strcmp(cur(p).value, "bounce") == 0) advance(p);
-            return stmt_new(STMT_IF_ON_EDGE_BOUNCE, line);
-        }
-    }
-
     /* ── create clone of (target) ── */
     if (check(p, TOK_IDENT) && strcmp(cur(p).value, "create") == 0) {
         advance(p);
         if (check(p, TOK_IDENT) && strcmp(cur(p).value, "clone") == 0) advance(p);
-        if (check(p, TOK_IDENT) && strcmp(cur(p).value, "of") == 0) advance(p);
+        if (check(p, TOK_OF)) advance(p);
         expect(p, TOK_LPAREN);
         char *tgt = read_name_until(p, TOK_RPAREN, TOK_EOF);
         expect(p, TOK_RPAREN);
