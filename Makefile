@@ -1,28 +1,25 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -g -std=c11
+IFLAGS  = -Icompiler -Idecompiler
 
-# Keep the root entry points tiny; implementation lives in focused folders.
-SRC     = main.c lexer.c ast.c parser.c emitter.c decompiler.c
-OBJ     = $(SRC:.c=.o)
+COMPILER_SRC = compiler/lexer.c compiler/ast.c compiler/parser.c compiler/emitter.c
+DECOMP_SRC   = decompiler/decompiler.c decompiler/decompiler_fix.c
+COMMON_SRC   = $(COMPILER_SRC) $(DECOMP_SRC)
+COMMON_OBJ   = $(COMMON_SRC:.c=.o)
+
 TARGET  = jappl2sb3
-
-SRV_SRC = server.c lexer.c ast.c parser.c emitter.c decompiler.c
-SRV_OBJ = $(SRV_SRC:.c=.o)
 SRV     = jappl2sb3-server
 
 all: $(TARGET) $(SRV)
 
-$(TARGET): $(OBJ)
+$(TARGET): main.o $(COMMON_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ -lz
 
-$(SRV): $(SRV_OBJ)
+$(SRV): runtime/server.o $(COMMON_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ -lz
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-server.o: server.c
-	$(CC) $(CFLAGS) -Icompiler -Idecompiler -c $< -o $@
+	$(CC) $(CFLAGS) $(IFLAGS) -c $< -o $@
 
 PORT ?= 8080
 
@@ -39,6 +36,6 @@ kill:
 	@kill $$(pgrep -x jappl2sb3-server) 2>/dev/null && echo "Server stopped" || echo "Not running"
 
 clean:
-	rm -f $(OBJ) $(SRV_OBJ) $(TARGET) $(SRV)
+	rm -f main.o $(COMMON_OBJ) runtime/server.o $(TARGET) $(SRV)
 
 .PHONY: all run kill clean

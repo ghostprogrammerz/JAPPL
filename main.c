@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
-#include "parser.h"
-#include "emitter.h"
-#include "decompiler.h"
+#include "compiler/parser.h"
+#include "compiler/emitter.h"
+#include "decompiler/decompiler.h"
 
 static char *read_file(const char *path) {
     FILE *f = fopen(path, "rb");
