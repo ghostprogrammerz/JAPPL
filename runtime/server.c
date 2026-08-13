@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <ctype.h>
 
 #include "parser.h"
@@ -25,8 +26,6 @@ static char g_ide_html[4096];
 static char g_ide_dir[4096];
 static char *g_sb3_buf;
 static size_t g_sb3_len;
-static char *g_preview_buf;
-static size_t g_preview_len;
 
 static void send_all(int fd, const char *buf, size_t len) {
     while (len) {
@@ -301,24 +300,37 @@ static void handle_static(int fd, const char *url) {
     free(body);
 }
 
-static int package_sb3(const char *sb3, char **out, size_t *out_len) {
-    char html[256];
-    char command[8192];
-    snprintf(html, sizeof(html), TMPDIR "/jappl_%d_preview.html", (int)getpid());
-    snprintf(command, sizeof(command),
-             "node \"%s/package-runtime.js\" \"%s\" \"%s\"",
-             g_ide_dir, sb3, html);
+/* Reap finished packager children to avoid zombies */
+static void reap_children(void) {
+    int status;
+    while (waitpid(-1, &status, WNOHANG) > 0) {}
+}
 
-    int rc = system(command);
-    if (rc != 0) {
-        fprintf(stderr, "TurboWarp Packager failed. Run: cd ide && npm install\n");
-        unlink(html);
-        return -1;
+/* Run node packager in background; parent returns immediately.
+   The child writes the result to a fixed path the /preview handler reads. */
+static void package_sb3_async(const char *sb3_path) {
+    char path_copy[512];
+    strncpy(path_copy, sb3_path, sizeof(path_copy) - 1);
+    path_copy[sizeof(path_copy) - 1] = '\0';
+
+    pid_t pid = fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        char html[256];
+        char done_path[256];
+        char command[8192];
+        snprintf(html, sizeof(html), TMPDIR "/jappl_%d_preview.html", (int)getpid());
+        snprintf(done_path, sizeof(done_path), TMPDIR "/jappl_preview_ready.html");
+        snprintf(command, sizeof(command),
+                 "node \"%s/package-runtime.js\" \"%s\" \"%s\"",
+                 g_ide_dir, path_copy, html);
+        if (system(command) == 0)
+            rename(html, done_path);
+        else
+            unlink(html);
+        _exit(0);
     }
-
-    *out = read_file_binary(html, out_len);
-    unlink(html);
-    return *out ? 0 : -1;
+    /* parent returns; child runs independently */
 }
 
 static void handle_compile(int fd, const char *src, size_t src_len) {
@@ -395,23 +407,17 @@ static void handle_compile(int fd, const char *src, size_t src_len) {
         return;
     }
 
-    char *preview = NULL;
-    size_t preview_len = 0;
-    if (package_sb3(tmp, &preview, &preview_len) == 0) {
-        free(g_preview_buf);
-        g_preview_buf = preview;
-        g_preview_len = preview_len;
-    } else {
-        free(g_preview_buf);
-        g_preview_buf = NULL;
-        g_preview_len = 0;
-    }
-
-    unlink(tmp);
+    /* Respond with the .sb3 immediately — don't block on node packager */
     free(g_sb3_buf);
     g_sb3_buf = sb3;
     g_sb3_len = len;
     http_respond(fd, 200, "application/zip", g_sb3_buf, g_sb3_len);
+
+    /* Start packager in background for /preview endpoint */
+    package_sb3_async(tmp);
+    unlink(tmp);
+
+    reap_children();
 }
 
 static void handle_connection(int fd) {
@@ -431,10 +437,14 @@ static void handle_connection(int fd) {
     }
 
     if (!strncmp(r.path, "/preview", 8)) {
-        if (g_preview_buf) {
-            http_respond(fd, 200, "text/html; charset=utf-8", g_preview_buf, g_preview_len);
+        reap_children();
+        size_t plen = 0;
+        char *pbuf = read_file_binary(TMPDIR "/jappl_preview_ready.html", &plen);
+        if (pbuf) {
+            http_respond(fd, 200, "text/html; charset=utf-8", pbuf, plen);
+            free(pbuf);
         } else {
-            const char *msg = "No packaged project yet. Compile first and run npm install in ide/.\n";
+            const char *msg = "Preview not ready yet — packager still running or npm install needed.\n";
             http_respond(fd, 404, "text/plain", msg, strlen(msg));
         }
         goto done;
