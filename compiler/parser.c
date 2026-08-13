@@ -706,31 +706,38 @@ static int is_binop(Parser *p, char *op_out) {
     return 0;
 }
 
+/* Apply a trailing 'contains (sub)' suffix to an expression if present.
+   Factors out the repeated pattern so it works both at top-level and on
+   the RHS of a binop (fixes Bugs 4 & 5). */
+static Expr *maybe_contains(Parser *p, Expr *left) {
+    if (!check(p, TOK_CONTAINS)) return left;
+    int line = cur(p).line;
+    advance(p);
+    expect(p, TOK_LPAREN);
+    Expr *sub = parse_expr(p);
+    expect(p, TOK_RPAREN);
+    Expr *e = expr_new(EXPR_STR_CONTAINS, line);
+    e->str_contains.str = left;
+    e->str_contains.sub = sub;
+    return e;
+}
+
 static Expr *parse_expr(Parser *p) {
-    Expr *left = parse_atom(p);
+    Expr *left = maybe_contains(p, parse_atom(p));
     char op[8];
     while (is_binop(p, op)) {
         int line = cur(p).line;
         advance(p);
-        Expr *right = parse_atom(p);
+        /* Apply contains on the RHS atom before wrapping in binop (Bug 4 & 5) */
+        Expr *right = maybe_contains(p, parse_atom(p));
         Expr *e = expr_new(EXPR_BINOP, line);
         e->binop.left  = left;
         e->binop.right = right;
         strcpy(e->binop.op, op);
         left = e;
     }
-    if (check(p, TOK_CONTAINS)) {
-        int line = cur(p).line;
-        advance(p);
-        expect(p, TOK_LPAREN);
-        Expr *sub = parse_expr(p);
-        expect(p, TOK_RPAREN);
-        Expr *e = expr_new(EXPR_STR_CONTAINS, line);
-        e->str_contains.str = left;
-        e->str_contains.sub = sub;
-        return e;
-    }
-    return left;
+    /* Also apply contains on the fully-assembled left side (handles top-level) */
+    return maybe_contains(p, left);
 }
 
 static Expr *parse_paren_expr(Parser *p) {
@@ -739,6 +746,19 @@ static Expr *parse_paren_expr(Parser *p) {
     }
     expect(p, TOK_LPAREN);
     int line = cur(p).line;
+
+    /* Bug 6: (( )) — Scratch empty-string slot. The outer '(' was consumed
+       above; if we now see '(' immediately followed by ')', that is the
+       empty-string pattern — return an empty EXPR_STRING instead of recursing
+       and miscounting parens. */
+    if (check(p, TOK_LPAREN) && peek(p).type == TOK_RPAREN) {
+        advance(p); /* consume inner '(' */
+        advance(p); /* consume inner ')' */
+        expect(p, TOK_RPAREN); /* consume outer ')' */
+        Expr *e = expr_new(EXPR_STRING, line);
+        e->str = strdup("");
+        return e;
+    }
 
     /* Param check MUST come before is_structured_expr_start so that a param
        named with a keyword token (e.g. "list ID") is caught as EXPR_ARG_REPORTER
@@ -784,8 +804,28 @@ static Expr *parse_paren_expr(Parser *p) {
         }
     }
 
-    if (is_structured_expr_start(p)) {
+    /* Bug 5: if the only reason we'd take the structured path is a leading
+       TOK_NUMBER, but the next token is NOT ')' (e.g. "0123456789." where '.'
+       follows the number), fall through to raw-string concat so the whole
+       digit-plus-punctuation sequence is captured as a string literal. */
+    int force_raw_string = 0;
+    if (cur(p).type == TOK_NUMBER) {
+        Token nx = peek(p);
+        if (nx.type != TOK_RPAREN && !is_binop(p, (char[8]){})) {
+            /* Check: after the number, if we have something that isn't a
+               closing paren or a binop operator, it's a raw string like
+               "0123456789." — don't parse as a number expression. */
+            int nx_is_binop = (nx.type == TOK_PLUS || nx.type == TOK_MINUS ||
+                               nx.type == TOK_STAR || nx.type == TOK_SLASH ||
+                               nx.type == TOK_MOD  || nx.type == TOK_AND   ||
+                               nx.type == TOK_OR   || nx.type == TOK_EQUAL ||
+                               nx.type == TOK_RANGLE || nx.type == TOK_LANGLE);
+            if (!nx_is_binop) force_raw_string = 1;
+        }
+    }
+    if (!force_raw_string && is_structured_expr_start(p)) {
         Expr *e = parse_expr(p);
+        e = maybe_contains(p, e);
         expect(p, TOK_RPAREN);
         return e;
     }
@@ -1456,6 +1496,9 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_LPAREN)) {
             advance(p);
             char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            /* Bug 6: consume optional second "of list (name)" suffix */
+            if (check(p, TOK_OF)) { advance(p); if (check(p, TOK_LIST)) advance(p);
+                if (check(p, TOK_LPAREN)) { advance(p); free(read_name_until(p, TOK_RPAREN, TOK_EOF)); expect(p, TOK_RPAREN); } }
             Stmt *s = stmt_new(STMT_LIST_DELETE, line); s->name = strdup(name); s->a = idx; return s;
         }
         expect(p, TOK_LANGLE);
@@ -1472,6 +1515,9 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_LPAREN)) {
             advance(p);
             char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            /* Bug 6: consume optional second "of list (name)" suffix */
+            if (check(p, TOK_OF)) { advance(p); if (check(p, TOK_LIST)) advance(p);
+                if (check(p, TOK_LPAREN)) { advance(p); free(read_name_until(p, TOK_RPAREN, TOK_EOF)); expect(p, TOK_RPAREN); } }
             Stmt *s = stmt_new(STMT_LIST_INSERT, line);
             s->name = strdup(name); s->a = item; s->b = idx; return s;
         }
@@ -1489,6 +1535,9 @@ static Stmt *parse_stmt(Parser *p) {
         if (check(p, TOK_LPAREN)) {
             advance(p);
             char *name = read_name_until(p, TOK_RPAREN, TOK_EOF); expect(p, TOK_RPAREN);
+            /* Bug 6: consume optional second "of list (name)" suffix */
+            if (check(p, TOK_OF)) { advance(p); if (check(p, TOK_LIST)) advance(p);
+                if (check(p, TOK_LPAREN)) { advance(p); free(read_name_until(p, TOK_RPAREN, TOK_EOF)); expect(p, TOK_RPAREN); } }
             expect(p, TOK_WITH);
             Expr *val = parse_paren_expr(p);
             Stmt *s = stmt_new(STMT_LIST_REPLACE, line);
