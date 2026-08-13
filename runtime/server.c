@@ -328,6 +328,7 @@ static void package_sb3_async(const char *sb3_path) {
             rename(html, done_path);
         else
             unlink(html);
+        unlink(path_copy); /* safe to delete now that node is done with it */
         _exit(0);
     }
     /* parent returns; child runs independently */
@@ -413,9 +414,9 @@ static void handle_compile(int fd, const char *src, size_t src_len) {
     g_sb3_len = len;
     http_respond(fd, 200, "application/zip", g_sb3_buf, g_sb3_len);
 
-    /* Start packager in background for /preview endpoint */
+    /* Start packager in background for /preview endpoint.
+       Child process owns the file and unlinks it when done. */
     package_sb3_async(tmp);
-    unlink(tmp);
 
     reap_children();
 }
