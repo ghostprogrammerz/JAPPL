@@ -107,13 +107,10 @@ static char *read_color_value(Parser *p) {
 static char *read_current_name(Parser *p) {
     char buf[256] = {0};
     int first = 1;
-    while (check(p, TOK_IDENT) || check(p, TOK_OF) || check(p, TOK_TO)) {
+    while (check(p, TOK_IDENT) || check(p, TOK_OF)) {
         if (!first) strncat(buf, " ", sizeof(buf)-strlen(buf)-1);
         if (check(p, TOK_OF)) {
             strncat(buf, "of", sizeof(buf)-strlen(buf)-1);
-            advance(p);
-        } else if (check(p, TOK_TO)) {
-            strncat(buf, "to", sizeof(buf)-strlen(buf)-1);
             advance(p);
         } else {
             strncat(buf, cur(p).value, sizeof(buf)-strlen(buf)-1);
@@ -121,7 +118,8 @@ static char *read_current_name(Parser *p) {
         }
         first = 0;
         if (check(p, TOK_RPAREN) || check(p, TOK_EOF) ||
-            check(p, TOK_RANGLE) || check(p, TOK_LPAREN)) break;
+            check(p, TOK_RANGLE) || check(p, TOK_LPAREN) ||
+            check(p, TOK_TO)) break;
     }
     if (strlen(buf) == 0) return strdup("year");
     return strdup(buf);
@@ -137,6 +135,7 @@ static int is_structured_expr_start(Parser *p) {
     if (cur(p).type == TOK_LBRACKET) return 1;
     if (cur(p).type == TOK_NOT)      return 1;
     if (cur(p).type == TOK_LPAREN)   return 1;
+    if (cur(p).type == TOK_LIST)     return 1;
     if (cur(p).type == TOK_MINUS && p->lexer.src[p->lexer.pos] >= '0'
                                   && p->lexer.src[p->lexer.pos] <= '9') return 1;
     if (cur(p).type == TOK_IDENT) {
@@ -169,6 +168,14 @@ static Expr *parse_atom(Parser *p) {
     }
     /* legacy [name with spaces] — kept for backward compat */
     if (check(p, TOK_LBRACKET)) {
+        /* ([) means the literal string "[" — next token is ) not ] */
+        if (peek(p).type == TOK_RPAREN || peek(p).type == TOK_RBRACKET ||
+            peek(p).type == TOK_EOF) {
+            advance(p);
+            Expr *e = expr_new(EXPR_STRING, line);
+            e->str = strdup("[");
+            return e;
+        }
         advance(p);
         char *name = read_name_until(p, TOK_RBRACKET, TOK_EOF);
         expect(p, TOK_RBRACKET);
@@ -1399,7 +1406,11 @@ static Stmt *parse_stmt(Parser *p) {
     /* ── lists ── */
     if (check(p, TOK_IDENT) && strcmp(cur(p).value, "add") == 0) {
         advance(p);
-        Expr *item = parse_paren_expr(p);
+        Expr *item;
+        if (check(p, TOK_LPAREN))
+            item = parse_paren_expr(p);   /* (expr) — parse_paren_expr handles parens */
+        else
+            item = parse_expr(p);          /* bare expr like: mouse y, current year, variable (x) */
         expect(p, TOK_TO);
         /* new: "list (name)" or legacy "<name>" */
         if (check(p, TOK_LIST)) advance(p);

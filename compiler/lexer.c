@@ -80,8 +80,8 @@ Token lexer_next(Lexer *l) {
 
     if (!c) return make_tok(TOK_EOF, NULL, line);
 
-    /* --global flag */
-    if (c == '-' && l->src[l->pos+1] == '-') {
+    /* --global flag — only when followed by a letter, not more dashes */
+    if (c == '-' && l->src[l->pos+1] == '-' && isalpha((unsigned char)l->src[l->pos+2])) {
         l->pos += 2;
         int start = l->pos;
         while (l->src[l->pos] && !isspace((unsigned char)l->src[l->pos])) l->pos++;
@@ -114,8 +114,26 @@ Token lexer_next(Lexer *l) {
         case '=': l->pos++; return make_tok(TOK_EQUAL,    "=", line);
     }
 
-    /* quoted string literal */
+    /* quoted string literal
+       Special case: a bare " immediately before ) is a literal quote character,
+       not a string delimiter — e.g. (") means the string value '"'.
+       This matches how the decompiler emits Scratch string values containing ". */
     if (c == '"') {
+        /* Lookahead: a " starts a real string only when a matching closing "
+           exists before the next ')' or newline. Bare-quote patterns like ("),
+           ("), and ((" at line: )) are Scratch literal-quote values. */
+        {
+            int k = l->pos + 1;
+            int found_close = 0;
+            while (l->src[k] && l->src[k] != ')' && l->src[k] != '\n') {
+                if (l->src[k] == '"') { found_close = 1; break; }
+                k++;
+            }
+            if (!found_close) {
+                l->pos++;
+                return make_tok(TOK_STRING, "\"", line);
+            }
+        }
         l->pos++;
         size_t cap = 64;
         size_t len = 0;
